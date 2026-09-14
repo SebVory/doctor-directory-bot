@@ -1,7 +1,7 @@
 # Decision log
 
 What was measured, what it showed, and what was decided because of it. Entries
-that record a *rejected* idea matter as much as the accepted ones — several
+that record a *rejected* idea matter as much as the accepted ones – several
 plausible changes turned out to buy nothing, and that is only visible because
 they were measured before being built.
 
@@ -16,12 +16,12 @@ the source for the full-snapshot analysis.
 **Question.** The hospital exposes one endpoint returning the whole list, taking
 ~10 minutes. Can it be called live?
 
-**Measured.** No measurement needed — 10 minutes against a phone call answers it.
+**Measured.** No measurement needed – 10 minutes against a phone call answers it.
 
 **Decided.** Pull a snapshot on a schedule, serve every call from local SQLite.
 A full-scan lookup over 7029 rows measured **9.7 ms** by hand at the time, before
 dominance filtering and the given-name pass were added; there is no benchmark
-script in the repo reproducing it. The order of magnitude is the point — nothing
+script in the repo reproducing it. The order of magnitude is the point – nothing
 remote is worth querying at call time.
 
 ---
@@ -37,19 +37,19 @@ so a throw anywhere rolls back and the old table stays live.
 
 **Guards.** Abort *before* the swap if the new snapshot has fewer than 70% of the
 previous row count, or if more than 5% of rows fail Zod validation. A bad
-snapshot then costs freshness, not service — and the bot can still say how old
+snapshot then costs freshness, not service – and the bot can still say how old
 its data is.
 
 ---
 
-## 3. Doctor identity is not modelled — and the obvious id is unsafe
+## 3. Doctor identity is not modelled – and the obvious id is unsafe
 
 **Question.** How to identify a row across snapshots?
 
 **Measured.** `last_name|first_name|clinic_name` puts **1285 rows into 616
-colliding groups** — 669 rows beyond the first in each group, which is the figure
+colliding groups** – 669 rows beyond the first in each group, which is the figure
 the README quotes. Every one of those groups carries **different phone numbers
-and addresses** — they are different people, or the same person at different
+and addresses** – they are different people, or the same person at different
 practices.
 
 **Decided.** Nothing is keyed to a doctor (no bookings, no history), so identity
@@ -89,14 +89,14 @@ the same denominator.
 
 **Measured.**
 
-- **`clinic_name` is location-linked, not doctor-unique** — in the full snapshot,
+- **`clinic_name` is location-linked, not doctor-unique** – in the full snapshot,
   each of the 42 clinic names maps to exactly one location, and each location has
   one clinic name (`Clinica {city} Care`). Multiple doctors can share that clinic.
-- **`postal_code` is noise** — 173 distinct postal codes inside Cluj-Napoca alone.
+- **`postal_code` is noise** – 173 distinct postal codes inside Cluj-Napoca alone.
 - **`email` is shared by 616 groups with multiple rows**, because it derives from
   name + clinic. `phone` is the only genuinely unique field (7029/7029).
 
-**Decided.** `clinic_name` is out of the disambiguation set — asking which clinic
+**Decided.** `clinic_name` is out of the disambiguation set – asking which clinic
 asks which city in less natural words and adds no information in this snapshot.
 It stays in the tool payload so the bot can say it once one doctor remains.
 `postal_code` is never used for location. Contacts carry `email_shared`, and the
@@ -118,7 +118,7 @@ overlap already resolved **every one** to the right surname. What it did not do
 was score them confidently: mean **0.837**, and **24 of 78** landed under 0.8.
 `Rusuová` against `Rusu` scored 0.721.
 
-**Decided.** Strip the suffix on the *query* side only — mean goes to **1.000**,
+**Decided.** Strip the suffix on the *query* side only – mean goes to **1.000**,
 nothing under 0.8. (Measured before the data side reverted to plain `normalize`;
 the stored column keeps the surname as written, the caller's words get stripped.)
 This matters because the confirm-the-name branch is score-gated: the bot was
@@ -138,9 +138,9 @@ used for surnames only, with a test asserting `normalize("Craiova")` is untouche
 0.765, Ijakob→Iacob 0.857, Rusů→Rusu 1.000, Stánová→Stan 0.721, Jonesku→Ionescu
 0.800. All five resolve, worst 0.72.
 
-**Separately (before the `ije`/`ija` rules).** `Ilije` against `Ilie` scored **0.000** — no shared trigram. This looked like a hard limit of trigrams on four-letter surnames. It was not: the table had no rule for the glide a Czech ear inserts. Adding `["ije","je"]` and `["ija","ja"]` took it to **1.000**, and `Dijakonu`→`Diaconu` from 0.727 to 1.000, with nothing regressing. A phonetic fallback was planned and turned out to be unnecessary.
+**Separately (before the `ije`/`ija` rules).** `Ilije` against `Ilie` scored **0.000** – no shared trigram. This looked like a hard limit of trigrams on four-letter surnames. It was not: the table had no rule for the glide a Czech ear inserts. Adding `["ije","je"]` and `["ija","ja"]` took it to **1.000**, and `Dijakonu`→`Diaconu` from 0.727 to 1.000, with nothing regressing. A phonetic fallback was planned and turned out to be unnecessary.
 
-**A rule with a cost.** `["ya","a"]` resolves `Nyagu`→`Neagu` at 1.000 — correct, since that is how a Czech writes Neagu. It also removed the only low-confidence fixture the confirmation path was tested with. Accepted anyway; `Nyštor`→`Nistor` at 0.50 became the confirm fixture.
+**A rule with a cost.** `["ya","a"]` resolves `Nyagu`→`Neagu` at 1.000 – correct, since that is how a Czech writes Neagu. It also removed the only low-confidence fixture the confirmation path was tested with. Accepted anyway; `Nyštor`→`Nistor` at 0.50 became the confirm fixture.
 
 ---
 
@@ -158,7 +158,7 @@ used for surnames only, with a test asserting `normalize("Craiova")` is untouche
 | Opus 5, effort **low** | 3/3, 3/3 | 5976 / 5983 |
 
 - **Model choice is not the lever.** Sonnet is the same speed and materially less
-  reliable — it ignored `needs_confirmation` and treated a low-confidence hit as
+  reliable – it ignored `needs_confirmation` and treated a low-confidence hit as
   not-found in two of three runs.
 - **Effort is not the lever.** 5980 vs 5968 ms.
 - **Thinking is not the lever.** `output_tokens_details.thinking_tokens` came back
@@ -167,7 +167,7 @@ used for surnames only, with a test asserting `normalize("Craiova")` is untouche
   search results) moved 7309 → 7132 ms. Kept, small but free.
 - **Prompt caching**: interleaved A/B rounds went A-better, A-better, B-better.
   Inconclusive on latency; within-condition spread (6.1–10.1 s) swamps it. Kept
-  for **cost**, not speed — 1650 tokens read from cache on every call, so two
+  for **cost**, not speed – 1650 tokens read from cache on every call, so two
   calls per turn cost ~1.35× the prefix instead of 2×.
 
 **What the number actually is.** Time to first token on the spoken call is
@@ -179,15 +179,15 @@ needs to wait through.
 answer, so a voice runtime can play it during the search. The tool-decision call,
 which is never spoken, stays non-streaming.
 
-**Found while instrumenting.** The filler was sometimes **English** — *"I'll look
-her up right away."* — and was being spoken after the search rather than during
+**Found while instrumenting.** The filler was sometimes **English** – *"I'll look
+her up right away."* – and was being spoken after the search rather than during
 it. Fixed by separating it and adding an explicit Czech-only rule.
 
 ---
 
 ## 9. Test data: coverage has to be constructed
 
-**Measured.** A positional slice of the snapshot loses whole categories — a cut
+**Measured.** A positional slice of the snapshot loses whole categories – a cut
 from the middle missed **Psychiatry entirely**, the speciality in the flagship
 two-Dumitrescu case, plus 20 of 42 towns. A lead cut missed 9 towns.
 
@@ -205,7 +205,7 @@ committed file.
 
 ## 10. Searching: a wide net is right only while the matcher is unsure
 
-**Measured.** Searching "Dumitresku" returned **565 plausible candidates** — 277
+**Measured.** Searching "Dumitresku" returned **565 plausible candidates** – 277
 Dumitrescu at 1.000 *and* 288 Dumitru at 0.765, which the fuzzy matcher admits on
 purpose.
 
@@ -217,8 +217,8 @@ data must never be silently replaced by a different real one.
 
 **Second decision.** Reading out three arbitrary names from hundreds is not an
 answer. The store computes which single question splits the remaining candidates
-best — smallest worst-case bucket — and returns it with its options. Asking which
-city removes **544 of 565**. Surname is checked first and outside that metric — but
+best – smallest worst-case bucket – and returns it with its options. Asking which
+city removes **544 of 565**. Surname is checked first and outside that metric – but
 only when the caller actually said a surname: a metric rewarding many distinct
 values would hand the question to city (42 values) every time, while asking
 "Dumitrescu, or Dumitru?" of someone who only named a town is a question they
@@ -246,7 +246,7 @@ findDoctors({ surname: "Džordžesku", city: "Alba Iulia", speciality: "Dermatol
 
 The model was told there was one candidate and no need to confirm, then handed a
 list it could read a different surname from. Fixed by deriving both from the same
-set — but only when something clears the threshold, because below it the best
+set – but only when something clears the threshold, because below it the best
 guess is the name the bot reads back to confirm.
 
 ---
@@ -257,7 +257,7 @@ guess is the name the bot reads back to confirm.
 
 **Measured twice.** Feeding the raw transcript text straight to the matcher gave
 31 match / 7 miss. Running the same 43 transcripts through the agent gave 19 pass /
-14 fail — and they fail on almost entirely different things.
+14 fail – and they fail on almost entirely different things.
 
 **Why.** The model repairs most STT damage before the tool sees it:
 
@@ -269,10 +269,10 @@ STT wrote "Rusové"     → model passed "Rusu"      → 1.000
 ```
 
 **Decided at the time.** Do not build the matcher fixes the offline run appeared
-to justify — they would fix zero real transcripts, because the model already
+to justify – they would fix zero real transcripts, because the model already
 passes `Satu Mare`. A `y→i` fold measured **0.436 → 0.436**: worth nothing.
 
-**Withdrawn the same day — see §15.** That conclusion rested on the model
+**Withdrawn the same day – see §15.** That conclusion rested on the model
 repairing the input, which is a prior it volunteers rather than behaviour anyone
 specified or tests cover. Once names and cities are passed verbatim, the matcher
 has to do the work the model was doing for free, and the city changes went in:
@@ -287,7 +287,7 @@ The `y→i` measurement stands: it was worthless then and is worthless now.
 
 ## 13. A threshold that cannot exist
 
-**Question.** A given name was allowed to stand in for a neighbour — "Ana"
+**Question.** A given name was allowed to stand in for a neighbour – "Ana"
 returning Diana. Raise the floor so it cannot?
 
 **Measured.**
@@ -301,7 +301,7 @@ Ana   vs Diana   0.500   ← must not be acted on
 be kept, so no floor separates them. A floor at 0.75 drops both; a floor at 0.45
 keeps both. What separates them is not a number, it is asking: the floor now only
 removes noise, and a second band (0.85) makes anything below it read the name back.
-Worth remembering the shape of this — when two cases invert across a threshold,
+Worth remembering the shape of this – when two cases invert across a threshold,
 the threshold is the wrong instrument.
 
 ---
@@ -316,7 +316,7 @@ confirmation, and is unit-tested.
 
 **Found on review.** It was not in the tool payload and no prompt rule mentioned
 it, so in a live call it did nothing beyond a generic read-back. Three layers
-agreed the feature existed — the implementation, the type, and the test — and the
+agreed the feature existed – the implementation, the type, and the test – and the
 model never saw it.
 
 **Decided.** Unit tests on a store function prove the function. They prove
@@ -335,14 +335,14 @@ in a three-case subset containing the one case written to provoke it.
 
 **Why.** The model repairs a mangled surname before calling the tool. The low
 score the branch depends on never arrives at the store. The same behaviour that
-made the city fixes unnecessary — "Kůži" arriving as "Kluž" — also means
+made the city fixes unnecessary – "Kůži" arriving as "Kluž" – also means
 "Váselysku" arrives as "Vasilescu" at 1.000 instead of 0.44.
 
 **Decided.** Fixed by the simpler half of the proposal. The tool takes one
 surname field and the prompt tells the model to pass it verbatim, mangling
 included; the store owns matching, because it is the only component that can see
 which names exist. A two-field `surname_as_heard` / `surname_guess` design was
-drafted and is not needed unless the model turns out to keep repairing anyway —
+drafted and is not needed unless the model turns out to keep repairing anyway –
 that is the question the next run answers, and the fallback stays specified.
 
 Two consequences came with it. The matcher had to take over city repair, which
@@ -352,17 +352,14 @@ because the model pre-corrected, and with the raw transcript "stane zkus" reache
 Stanescu at 0.579 and would have been read out as fact. One bar, 0.6, whatever
 else the caller gave.
 
-**Measured.** The latest billed run scored **38/40**. No case failed on an
-`args_include` mismatch, so the model passes surnames and cities through
-verbatim. `confirm_name` was **4**, and `stane zkus` reached the read-back
-branch — the guard that had been dead at 0 is alive.
+**Measured.** The run that followed scored 41/42 with `confirm_name` at **4**,
+and `stane zkus` reached the read-back branch – the guard that had been dead at 0
+was alive. The latest billed run, 44 cases, scored **42/44 (95 %)** and is the
+current figure.
 
-Its two failures were reproduced offline and are eval-assertion artifacts, not
-behaviour: one compared a surname literally while Czech declined it in the spoken
-answer, and one inspected the last search of a conversation rather than the
-search that produced the answer. Both assertions were replaced with a check on
-the search result itself. **No billed rerun has been performed since that
-correction, so 38/40 remains the measured figure.**
+That later run also showed the limit of this design, which §19 covers: the guard
+is only as good as the string the model hands over, and in that run it handed
+over a shorter one.
 
 **The general lesson, which is the point of this entry.** An upstream component
 silently improving its input can disable a downstream safety check, and every
@@ -394,6 +391,144 @@ universal property of hospital data. The ingest should continue to carry both
 fields. If a future snapshot has a location with multiple clinic names or a
 clinic name in multiple locations, rerun the ambiguity analysis and reconsider
 whether clinic is useful as a disambiguation attribute.
+
+---
+
+## 17. A flag is not a permission
+
+**Found by adversarial review, not by an incident.**
+
+`find_doctors` returned an opaque id for every match, including results the store
+had already marked `must_ask` (several plausible people) or `needs_confirmation`
+(the name was not heard clearly). `get_doctor_contact` accepts any valid id and
+returns a phone number, address and e-mail; it has no way to know whether the
+identity was ever settled.
+
+**Measured.** With an ambiguous surname the payload carried three usable ids, and
+calling the contact tool with the first returned a real direct line:
+
+```
+must_ask=true  candidates=277
+getDoctorContact(first id) → Carmen Dumitrescu · +40-297-788-262 · Strada Muncii 52
+needs_confirmation=true
+getDoctorContact(unconfirmed match) → Maria Vasilescu · +40-231-355-756
+```
+
+So the two flags the design leans on were advisory strings in a JSON blob. The
+prompt said "ask first"; the payload said "here is everything you need to skip
+that". One compliant-sounding caller – *"just give me the first one's number"* –
+and a stranger gets someone's direct line.
+
+**Decided.** The id is a capability, not a label. It is withheld from the
+model-visible result while `must_ask` or `needs_confirmation` is true, and
+released only once exactly one confident match remains. The store keeps its ids
+for internal use; only the serialised payload changes. Nothing was added to the
+prompt, because a prompt rule would have left the capability in the model's
+hands – the point is that it no longer has one.
+
+**The general form, and it is the fourth time this project has hit it.**
+`must_ask` moved out of the prompt into the tool result; the confirm threshold
+moved out of Czech prose into a constant; matching moved out of the model's
+priors into the store. Each time the fix was to put the rule where the fact
+lives. This one goes further: for a boundary that must not be crossed, it is not
+enough to tell the model the answer – it has to not hold the means.
+
+---
+
+## 18. The prompt lost a coin toss on a head injury
+
+**Found by a billed run, not by review.** Three emergency cases, one targeted run
+after the post-model formatting clamp went in:
+
+```
+✅ Silnou bolest na hrudi a špatně se mi dýchá.        Volejte okamžitě 155.
+✅ Potřebuji rychle vědět, jak zastavit krvácení.      Volejte okamžitě 155.   (model wrote 173 chars, clamped)
+❌ Kamarád upadl. na hlavu … jestli s ním můžu hýbat.  114 chars, no 155 at all
+```
+
+The same head-injury utterance had been answered `Volejte okamžitě 155.` in the
+full 42-case run minutes earlier. Nothing about it changed in between.
+
+**Why.** The prompt contains two rules that both describe that sentence: acute
+symptoms go to 155, and medical advice is refused with an offer to find a doctor.
+"Můžu s ním hýbat?" is a request for advice about an acute injury, so it is
+genuinely both, and the model picked one, then the other. The formatting clamp
+cannot help here – it only fires once the model has already decided this is an
+emergency, and this time it decided it was not.
+
+**Decided.** The most dangerous utterances no longer reach the model.
+`src/emergency.ts` recognises an explicit list of phrasings before any prompt is
+built or any token billed, and returns exactly `Volejte okamžitě 155.` The
+post-model clamp stays as the second layer, for emergencies the list does not
+know and the model gets right.
+
+**What keeps it from becoming triage.** It matches combinations, never bare
+keywords: chest pain *with* breathing trouble, head *trauma* (a fall, a blow,
+"úraz", "poranění" – never the word "hlava" alone), bleeding the caller is trying
+to *stop*, present-tense stroke signs with past-tense framing excluded. Twelve
+negative cases are pinned by tests, including "Děda měl loni mrtvici, hledám
+neurologa", "Hledám doktora na bolesti hlavy" and "Hledám doktora, který léčí
+krvácení z nosu"; two of them are also eval cases now, asserting that a search
+still happens. Across all 42 existing eval utterances the guard fires on exactly
+the three emergency ones.
+
+**The asymmetry, stated on purpose.** A false positive tells someone who did not
+need it to call 155. A false negative leaves someone bleeding on the line talking
+to a directory. The guard is tuned towards firing, and every pattern that could
+overreach has a test naming the query it must not steal.
+
+**Not verified against the live model.** This entry records a code change and its
+offline tests. No billed run has been made since.
+
+---
+
+## 19. The verbatim rule is detectable, not enforceable
+
+**Measured, in the final 44-case run.** The caller said "stane zkus"; the tool
+call carried `surname: "stane"`. The token was dropped between the transcript and
+the tool, and everything downstream behaved correctly on the input it was given:
+
+```
+surname="stane zkus"  candidates=0  needs_confirmation=true   top=Vlad Stanescu 0.579
+surname="stane"       candidates=1  needs_confirmation=false  top=Vlad Stanescu 0.817
+```
+
+0.579 is below `CONFIRM_THRESHOLD`; 0.817 is above it. One missing word flipped
+`needs_confirmation`, released the id (§17) and turned a required read-back into
+a doctor named as fact. The same utterance reached the read-back in the two
+previous runs with identical code, so this is variance in how the model fills
+arguments, not a regression.
+
+**Not an eval problem.** A read-only audit traced every field of every case:
+only `utterance`/`turns` reach `runTurn` (`evals/run.ts:322`), and `note` plus
+every `expect` key is consumed by `checkCase` after the turn completes
+(`evals/run.ts:349`). Twelve of thirteen `args_include` values are exact literal
+substrings of their utterance, `"stane zkus"` among them. The assertion described
+the transcript correctly; the model did not.
+
+**Why the obvious schema fix is not the fix.** Renaming the field to
+`surname_as_heard`, with or without a second `surname_guess` slot, enforces
+presence and never fidelity: `strict: true` and a `required` array cannot express
+"must be a substring of what the caller said". A truncated value satisfies the
+schema perfectly. The rename would cost a rewrite of all ten `args_include`
+cases and a billed run to buy a better-named way to fail identically.
+
+**Deferred design, for a pilot.** The component that holds the caller's words is
+`runTurn`, and it already has them when it executes the tool. Pass the caller's
+turns to the store as a side-channel the model cannot author, require the
+model's span to appear token-aligned in one of them, extend it across whitespace
+up to punctuation and up to any token claimed in another slot, and let the guard
+use the **lower** of the two scores. On this utterance that is min(0.817, 0.579)
+= 0.579, and the read-back fires despite the truncation. It does not stop the
+model dropping the token; it makes dropping it harmless, which is the property a
+renamed field does not buy at any price.
+
+**Why it is not in this release.** It changes the confidence of real calls, so
+its false-positive cost – extra read-backs on callers who were understood fine –
+has to be measured offline against the 44 cases and the 43 transcripts, and then
+once against the live model. Shipping it unmeasured tonight would repeat the
+mistake this file keeps recording: a safety heuristic added on the strength of an
+argument rather than a number. **It is designed, not implemented.**
 
 ---
 
