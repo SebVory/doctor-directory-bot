@@ -536,6 +536,50 @@ number is 42/44 (95 %).**
 
 ---
 
+## 2026-09-15 — re-validace jednoho vícetahového scénáře, 3 tahy
+
+Not an eval run. The narrowing dialogue in the README was labelled "skutečný
+průběh z eval běhu" and could not be shown: the runner prints answers truncated
+to 52 characters, so no full transcript of any run is kept anywhere. The
+candidate counts reproduced offline, the sentences had nothing behind them.
+
+The replay says it was taken from a real run when it was written. The answers
+come back almost word for word, which a reconstruction would not do. What had
+happened since is drift: the prompt, the thresholds and the question logic all
+moved, and the frozen text quietly stopped matching what the agent says today.
+
+Three turns, one replay, about four billed calls, answers printed in full. The
+README now carries that transcript verbatim and says which run it is from.
+
+```text
+--- tah 1 ---  Hledám doktora Dumitresku
+find_doctors({"surname":"Dumitresku",...})            candidates 277
+Doktorů Dumitrescu mám víc. V jakém městě ordinuje — například v Mediaši, v Brašově, v Kluži, nebo v Romanu?
+
+--- tah 2 ---  V Kluži
+find_doctors({"surname":"Dumitresku","city":"Kluži",...})   candidates 11
+V Kluži jich mám jedenáct. Jaké má křestní jméno — například Alina, Andrei, Bogdan, nebo Cristina?
+
+--- tah 3 ---  Alinu
+find_doctors({"surname":"Dumitresku","first_name":"Alina","city":"Kluži",...})  candidates 1
+Mám ji: doktorka Alina Dumitrescu, psychiatrie, Clinica Cluj-Napoca Care. Přejete si kontakt nebo ordinační hodiny?
+```
+
+Three differences, all drift rather than invention. The README had "Znáte
+křestní jméno" where the agent now says "Jaké má křestní jméno". It had dropped
+the "například" that tells the caller four cities out of forty-two are being
+offered, which is the one that actually changes meaning. And the closing turn
+ends by asking whether the caller wants the contact, so the note under the block
+claiming the bot never offers it had to be corrected too.
+
+And the caller said "Alinu"; the tool call carried `first_name: "Alina"`. The
+model declined the accusative before passing it on. Harmless here, the match is
+the same person, but it is the same class of edit as `stane zkus` becoming
+`stane` (§19): the verbatim rule is not enforced, and this run is another
+observation of it being broken quietly.
+
+---
+
 ## Next run
 
 The three case fixes above are unmeasured. The open question is whether

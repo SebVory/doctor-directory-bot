@@ -87,23 +87,27 @@ konstanta v kódu.
 
 ## Jeden hovor
 
-Skutečný průběh z eval běhu, 277 kandidátů na jednoho ve třech tazích:
+Doslovný přepis běhu přes agenta z 15. 9. 2026, ze 277 kandidátů na jednoho ve
+třech tazích. Počty vpravo jsou to, co v tom tahu vrátil tool.
 
 ```
 👤 Hledám doktora Dumitresku                         277 kandidátů
-🤖 Doktorů Dumitrescu mám víc. V jakém městě ordinuje — v Mediaši,
-   v Brašově, v Kluži, nebo v Romanu?
+🤖 Doktorů Dumitrescu mám víc. V jakém městě ordinuje — například
+   v Mediaši, v Brašově, v Kluži, nebo v Romanu?
 
 👤 V Kluži                                            11 kandidátů
-🤖 V Kluži jich mám jedenáct. Znáte křestní jméno — Alina, Andrei,
-   Bogdan, nebo Cristina?
+🤖 V Kluži jich mám jedenáct. Jaké má křestní jméno — například Alina,
+   Andrei, Bogdan, nebo Cristina?
 
 👤 Alinu                                               1 kandidát
-🤖 Mám ji: doktorka Alina Dumitrescu, psychiatrie, Clinica Cluj-Napoca Care
+🤖 Mám ji: doktorka Alina Dumitrescu, psychiatrie, Clinica Cluj-Napoca
+   Care. Přejete si kontakt nebo ordinační hodiny?
 ```
 
-Kontakt bot sám nenabízí; telefon nebo adresu načte až poté, co si o ně
-volající výslovně řekne.
+Nad 277 kandidáty se bot nezeptá na příjmení, které mají všichni stejné, ale na
+město, protože to jich vyřadí nejvíc. „Například" v otázce znamená, že možností
+je víc než ty čtyři jmenované, konkrétně 42 měst. Telefon ani adresu nepřečte,
+dokud si o ně volající neřekne; v posledním tahu se jen zeptá, jestli je chce.
 
 ## Co ukázal plný snapshot
 
