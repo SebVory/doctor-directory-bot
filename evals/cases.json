@@ -15,7 +15,10 @@
     "utterance": "Dobrý den, já bych se chtěl zeptat, do kolika má restaurace Elena Dobryová?",
     "note": "STT wrote 'restaurace' for 'doktorka' — still a doctor lookup",
     "expect": {
-      "tool": "find_doctors"
+      "tool": "find_doctors",
+      "args_include": {
+        "surname": "Dobryová"
+      }
     }
   },
   {
@@ -35,7 +38,10 @@
     "note": "speciality narrows but many remain",
     "expect": {
       "tool": "find_doctors",
-      "behaviour": "ask_clarification"
+      "behaviour": "ask_clarification",
+      "resolved_includes": {
+        "speciality": "Pediatrics"
+      }
     }
   },
   {
@@ -43,7 +49,10 @@
     "note": "STT dropped the S from Stancu; speciality carries it",
     "expect": {
       "tool": "find_doctors",
-      "behaviour": "ask_clarification"
+      "behaviour": "ask_clarification",
+      "resolved_includes": {
+        "speciality": "Pulmonology"
+      }
     }
   },
   {
@@ -111,10 +120,10 @@
   },
   {
     "utterance": "Dobrý den, schání pediatra čivu v Brasově.",
-    "note": "0.50 inside 'paediatrician in Brasov' is evidence enough — ask which of the two, do not re-confirm",
+    "note": "surname 'čivu' scores 0.50, below the single 0.6 threshold: confirm Chivu first, then disambiguate Laura/Radu if needed",
     "expect": {
       "tool": "find_doctors",
-      "behaviour": "ask_clarification",
+      "behaviour": "confirm_name",
       "args_include": {
         "surname": "čivu"
       }
@@ -141,10 +150,10 @@
   },
   {
     "utterance": "Dobrý den, potřebuji telefon na pana, doktora. Vlada Moldanová.",
-    "note": "0.55 with a given name alongside: narrow, do not confirm",
+   "note": "Moldanová reaches Vlad Moldovan at 0.55; the given name does not lower the single 0.6 threshold, so read the surname back first",
     "expect": {
       "tool": "find_doctors",
-      "behaviour": "ask_clarification"
+      "behaviour": "confirm_name"
     }
   },
   {
@@ -402,6 +411,18 @@
         "city": "Satu Mare"
       },
       "behaviour": "ask_clarification"
+    }
+  },
+  {
+    "utterance": "Dobrý den, potřebuji, ee kardiologa, stane zkus. Temešváru.",
+    "note": "the transcript shattered the surname across a space; at 0.579 it used to pass the narrowed bar and be named as fact, and now has to be read back",
+    "expect": {
+      "tool": "find_doctors",
+      "args_include": {
+        "surname": "stane zkus",
+        "city": "Temešváru"
+      },
+      "behaviour": "confirm_name"
     }
   }
 ]

@@ -5,7 +5,9 @@ that record a *rejected* idea matter as much as the accepted ones — several
 plausible changes turned out to buy nothing, and that is only visible because
 they were measured before being built.
 
-Numbers come from the full 7029-row snapshot unless stated otherwise.
+Numbers come from the full 7029-row interview snapshot unless stated otherwise.
+The committed `data/data-sample.json` is a smaller stratified test fixture, not
+the source for the full-snapshot analysis.
 
 ---
 
@@ -17,8 +19,10 @@ Numbers come from the full 7029-row snapshot unless stated otherwise.
 **Measured.** No measurement needed — 10 minutes against a phone call answers it.
 
 **Decided.** Pull a snapshot on a schedule, serve every call from local SQLite.
-A full-scan lookup over 7029 rows costs **9.7 ms**, so there is no case for
-querying anything remote at call time.
+A full-scan lookup over 7029 rows measured **9.7 ms** by hand at the time, before
+dominance filtering and the given-name pass were added; there is no benchmark
+script in the repo reproducing it. The order of magnitude is the point — nothing
+remote is worth querying at call time.
 
 ---
 
@@ -42,9 +46,10 @@ its data is.
 
 **Question.** How to identify a row across snapshots?
 
-**Measured.** `last_name|first_name|clinic_name` collides on **669 of 7029 rows**
-(616 groups). Every one of those groups carries **different phone numbers and
-addresses** — they are different people, or the same person at different
+**Measured.** `last_name|first_name|clinic_name` puts **1285 rows into 616
+colliding groups** — 669 rows beyond the first in each group, which is the figure
+the README quotes. Every one of those groups carries **different phone numbers
+and addresses** — they are different people, or the same person at different
 practices.
 
 **Decided.** Nothing is keyed to a doctor (no bookings, no history), so identity
@@ -74,23 +79,33 @@ minimum viable question set. No lookup can end on a name alone. City is the
 better first question (42 values, 141–196 doctors each) than speciality (20
 values, 325–381 each).
 
+The 43 raw macOS transcripts, the earlier 38-case agent eval, and the current
+40-case eval are different collections and must not be compared as if they had
+the same denominator.
+
 ---
 
 ## 5. Three fields in the data are traps
 
 **Measured.**
 
-- **`clinic_name` is a bijection with `location`** — 42 clinics, 42 cities,
-  `Clinica {city} Care`. Zero cities with two clinics, zero clinics in two cities.
+- **`clinic_name` is location-linked, not doctor-unique** — in the full snapshot,
+  each of the 42 clinic names maps to exactly one location, and each location has
+  one clinic name (`Clinica {city} Care`). Multiple doctors can share that clinic.
 - **`postal_code` is noise** — 173 distinct postal codes inside Cluj-Napoca alone.
-- **`email` is shared by 616 pairs of different doctors**, because it derives from
+- **`email` is shared by 616 groups with multiple rows**, because it derives from
   name + clinic. `phone` is the only genuinely unique field (7029/7029).
 
 **Decided.** `clinic_name` is out of the disambiguation set — asking which clinic
-asks which city in a word no caller would use. It stays in the tool payload so
-the bot can say it once one doctor remains. `postal_code` is never used for
-location. Contacts carry `email_shared`, and the bot says the address belongs to
-the clinic while the phone is the direct line.
+asks which city in less natural words and adds no information in this snapshot.
+It stays in the tool payload so the bot can say it once one doctor remains.
+`postal_code` is never used for location. Contacts carry `email_shared`, and the
+bot says the address belongs to the clinic while the phone is the direct line.
+
+**Recheck rule.** This is a measured property of the current full snapshot, not
+a universal property of hospital data. If a future snapshot has a location with
+multiple clinic names or a clinic name in multiple locations, rerun the ambiguity
+analysis and reconsider whether clinic is useful as a disambiguation attribute.
 
 ---
 
@@ -105,9 +120,9 @@ was score them confidently: mean **0.837**, and **24 of 78** landed under 0.8.
 
 **Decided.** Strip the suffix on the *query* side only — mean goes to **1.000**,
 nothing under 0.8. (Measured before the data side reverted to plain `normalize`;
-the stored column keeps the surname as written, the caller's words get stripped.) This
-matters because the confirm-the-name branch is score-gated: the bot was asking
-"did I hear you right?" about names it had heard perfectly.
+the stored column keeps the surname as written, the caller's words get stripped.)
+This matters because the confirm-the-name branch is score-gated: the bot was
+asking "did I hear you right?" about names it had heard perfectly.
 
 **Constraint discovered.** It cannot live in the general `normalize()`, because
 the city `Craiova` would become `kraj`. Hence a separate `normalizeSurname()`
@@ -123,17 +138,9 @@ used for surnames only, with a test asserting `normalize("Craiova")` is untouche
 0.765, Ijakob→Iacob 0.857, Rusů→Rusu 1.000, Stánová→Stan 0.721, Jonesku→Ionescu
 0.800. All five resolve, worst 0.72.
 
-**Separately (before the `ije`/`ija` rules).** `Ilije` against `Ilie` scored **0.000** — no shared trigram. This
-looked like a hard limit of trigrams on four-letter surnames. It was not: the
-table had no rule for the glide a Czech ear inserts. Adding `["ije","je"]` and
-`["ija","ja"]` took it to **1.000**, and `Dijakonu`→`Diaconu` from 0.727 to 1.000,
-with nothing regressing. A phonetic fallback was planned and turned out to be
-unnecessary.
+**Separately (before the `ije`/`ija` rules).** `Ilije` against `Ilie` scored **0.000** — no shared trigram. This looked like a hard limit of trigrams on four-letter surnames. It was not: the table had no rule for the glide a Czech ear inserts. Adding `["ije","je"]` and `["ija","ja"]` took it to **1.000**, and `Dijakonu`→`Diaconu` from 0.727 to 1.000, with nothing regressing. A phonetic fallback was planned and turned out to be unnecessary.
 
-**A rule with a cost.** `["ya","a"]` resolves `Nyagu`→`Neagu` at 1.000 — correct,
-since that is how a Czech writes Neagu. It also removed the only low-confidence
-fixture the confirmation path was tested with. Accepted anyway; `Nyštor`→`Nistor`
-at 0.50 became the confirm fixture.
+**A rule with a cost.** `["ya","a"]` resolves `Nyagu`→`Neagu` at 1.000 — correct, since that is how a Czech writes Neagu. It also removed the only low-confidence fixture the confirmation path was tested with. Accepted anyway; `Nyštor`→`Nistor` at 0.50 became the confirm fixture.
 
 ---
 
@@ -185,10 +192,14 @@ from the middle missed **Psychiatry entirely**, the speciality in the flagship
 two-Dumitrescu case, plus 20 of 42 towns. A lead cut missed 9 towns.
 
 **Decided.** `make-sample.ts` builds a 500-row slice that covers every speciality,
-location, language and surname, pins the ambiguous groups, the id-collision
-groups and the irreducible pairs, then stride-fills to keep the distribution.
-Deterministic, regenerable, never hand-edited. Tests read it, so a fresh clone
-runs green without the 3 MB snapshot.
+location, language and surname, pins the ambiguous groups, the id-collision groups
+and the irreducible pairs, then stride-fills to keep the distribution. Deterministic,
+regenerable, never hand-edited. Tests read it, so a fresh clone runs green without
+the 3 MB snapshot.
+
+The sample is intentionally not the analytical source for the 7029-row claims.
+It is a regression fixture designed to preserve important edge cases in a small,
+committed file.
 
 ---
 
@@ -207,19 +218,20 @@ data must never be silently replaced by a different real one.
 **Second decision.** Reading out three arbitrary names from hundreds is not an
 answer. The store computes which single question splits the remaining candidates
 best — smallest worst-case bucket — and returns it with its options. Asking which
-city removes **544 of 565**. Surname is checked first and outside that metric — but only when the caller
-actually said a surname: a metric rewarding many distinct values would hand the
-question to city (42 values) every time, while asking "Dumitrescu, or Dumitru?"
-of someone who only named a town is a question they cannot answer.
+city removes **544 of 565**. Surname is checked first and outside that metric — but
+only when the caller actually said a surname: a metric rewarding many distinct
+values would hand the question to city (42 values) every time, while asking
+"Dumitrescu, or Dumitru?" of someone who only named a town is a question they
+cannot answer.
 
 ---
 
 ## 11. Two bugs found by asking what the model actually receives
 
-**Unresolved terms were silently dropped.** A city the matcher could not place
-fell out of the filter, so "kardiolog v Brně" returned three cardiologists in
-Romania and the model was never told why. Terms that do not resolve now return no
-matches and name themselves in `unresolved`.
+**Unresolved terms were silently dropped.** A city the matcher could not place fell
+out of the filter, so "kardiolog v Brně" returned three cardiologists in Romania
+and the model was never told why. Terms that do not resolve now return no matches
+and name themselves in `unresolved`.
 
 **The shortlist and the candidate count disagreed.** `matches` was sliced straight
 off the scored rows while `candidates` counted only rows above the confirm
@@ -244,8 +256,8 @@ guess is the name the bot reads back to confirm.
 **Question.** How does the system handle verbatim Czech dictation?
 
 **Measured twice.** Feeding the raw transcript text straight to the matcher gave
-31 match / 7 miss. Running the same 43 transcripts through the agent gave
-19 pass / 14 fail — **and they fail on almost entirely different things**.
+31 match / 7 miss. Running the same 43 transcripts through the agent gave 19 pass /
+14 fail — and they fail on almost entirely different things.
 
 **Why.** The model repairs most STT damage before the tool sees it:
 
@@ -256,16 +268,20 @@ STT wrote "Santumare"  → model passed "Satu Mare" → found Andrei Rusu 1.00
 STT wrote "Rusové"     → model passed "Rusu"      → 1.000
 ```
 
-**Decided.** Do not build the matcher fixes the offline run appeared to justify.
-Space-stripped city matching is measurably safe (zero false positives across nine
-non-network cities, all 42 cities still self-resolve) and would lift `Santumare`
-from 0.286 to 0.615 — and would fix **zero** real transcripts, because the model
-already passes `Satu Mare`. A `y→i` fold was measured at **0.436 → 0.436**: worth
-nothing, because the mismatch is `e`/`i`.
+**Decided at the time.** Do not build the matcher fixes the offline run appeared
+to justify — they would fix zero real transcripts, because the model already
+passes `Satu Mare`. A `y→i` fold measured **0.436 → 0.436**: worth nothing.
 
-The real failures are elsewhere — confirming names that are not in the shortlist,
-naming one doctor out of 186, and STT noise words derailing a lookup into a
-refusal. Those are where effort goes.
+**Withdrawn the same day — see §15.** That conclusion rested on the model
+repairing the input, which is a prior it volunteers rather than behaviour anyone
+specified or tests cover. Once names and cities are passed verbatim, the matcher
+has to do the work the model was doing for free, and the city changes went in:
+space-insensitive comparison, a lower floor for cities than for specialities, and
+synonyms lifted from the transcripts. Offline over the 43 transcripts that moved
+31 match / 7 miss to **35 / 3**, with no false positive among the nine towns
+outside the network and all 42 real locations still resolving to themselves.
+
+The `y→i` measurement stands: it was worthless then and is worthless now.
 
 ---
 
@@ -284,9 +300,9 @@ Ana   vs Diana   0.500   ← must not be acted on
 **Decided.** The one that must be rejected scores *higher* than the one that must
 be kept, so no floor separates them. A floor at 0.75 drops both; a floor at 0.45
 keeps both. What separates them is not a number, it is asking: the floor now only
-removes noise, and a second band (0.85) makes anything below it read the name
-back. Worth remembering the shape of this — when two cases invert across a
-threshold, the threshold is the wrong instrument.
+removes noise, and a second band (0.85) makes anything below it read the name back.
+Worth remembering the shape of this — when two cases invert across a threshold,
+the threshold is the wrong instrument.
 
 ---
 
@@ -305,8 +321,8 @@ model never saw it.
 
 **Decided.** Unit tests on a store function prove the function. They prove
 nothing about whether the agent receives its output. Anything added to
-`FindResult` now gets checked at the payload and in the prompt before it counts
-as done.
+`FindResult` now gets checked at the payload and in the prompt before it counts as
+done.
 
 ---
 
@@ -322,18 +338,59 @@ score the branch depends on never arrives at the store. The same behaviour that
 made the city fixes unnecessary — "Kůži" arriving as "Kluž" — also means
 "Váselysku" arrives as "Vasilescu" at 1.000 instead of 0.44.
 
-**Decided.** Not fixed here, because the fix is a design change rather than a
-tweak. The branch is reachable in unit tests, which call the store directly, and
-close to unreachable in production. Proposed: the tool takes
-`surname_as_heard` — the transcript verbatim, which the model is told not to
-correct — alongside `surname_guess`. The store scores both and confirms aloud
-when the correction drifts far from what was heard. That restores the guard
-without giving up the repair.
+**Decided.** Fixed by the simpler half of the proposal. The tool takes one
+surname field and the prompt tells the model to pass it verbatim, mangling
+included; the store owns matching, because it is the only component that can see
+which names exist. A two-field `surname_as_heard` / `surname_guess` design was
+drafted and is not needed unless the model turns out to keep repairing anyway —
+that is the question the next run answers, and the fallback stays specified.
+
+Two consequences came with it. The matcher had to take over city repair, which
+the model had been doing for free (§12). And the lower confirm threshold for
+narrowed queries had to go: 0.45 was calibrated when scores arrived near 1.0
+because the model pre-corrected, and with the raw transcript "stane zkus" reaches
+Stanescu at 0.579 and would have been read out as fact. One bar, 0.6, whatever
+else the caller gave.
+
+**First post-change API run.** The 40-case run produced 37/40 and
+`confirm_name: 4`; `stane zkus` reached the read-back branch as intended. The two
+low-confidence failures (`čivu` at 0.50 and `Moldanová` at 0.55) were stale
+expectations left from the old narrowed-threshold behaviour. The third failure
+was a checker false negative: “Znáte jeho křestní jméno?” is a valid clarification
+question, but the pattern did not recognise it. The cases and checker were
+corrected without changing agent or store behaviour. A clean post-correction run
+is still required before publishing a final pass rate.
 
 **The general lesson, which is the point of this entry.** An upstream component
 silently improving its input can disable a downstream safety check, and every
 test still passes, because the tests feed the downstream component directly. The
 only thing that caught it was a counter of what actually happened per call.
+
+---
+
+## 16. Rechecking an apparently obvious conclusion
+
+**Trigger.** A review questioned the statement that `clinic_name` is redundant
+with `location`, because the committed 500-row test sample visibly contains many
+different clinic names.
+
+**What was checked.** The sample is deliberately a small stratified test fixture,
+not the source for the data analysis. The claim was measured on the full 7029-row
+interview snapshot: 42 distinct locations, 42 distinct clinic names, zero
+locations with more than one clinic name, and zero clinic names appearing in more
+than one location. In that snapshot, clinic and location form a bijection.
+
+**What the claim does and does not mean.** It does not mean one clinic identifies
+one doctor. Multiple doctors can share a clinic. It means that, for the purpose
+of asking a caller one more question, `clinic_name` contributes no information
+that `location` does not already contribute, and is less natural for a caller to
+provide. It is deliberately excluded from `QUESTION_ATTRIBUTES`.
+
+**Recheck rule.** This is a property of the current source snapshot, not a
+universal property of hospital data. The ingest should continue to carry both
+fields. If a future snapshot has a location with multiple clinic names or a
+clinic name in multiple locations, rerun the ambiguity analysis and reconsider
+whether clinic is useful as a disambiguation attribute.
 
 ---
 

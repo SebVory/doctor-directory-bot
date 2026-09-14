@@ -38,6 +38,7 @@ describe("ask_clarification pattern", () => {
     "V Kluži jich mám jedenáct. Znáte křestní jméno — Alina, Andrei, Bogdan, nebo Cristina?",
     "Doktorů Dumitrescu mám víc. V jakém městě ordinuje — v Mediaši, v Kluži, nebo v Romanu?",
     "Hledáte doktorku Darii, nebo doktora Bogdana?",
+    "Znáte jeho křestní jméno? Pomohlo by mi to zúžit výběr.",
   ])("matches %j", (answer) => {
     expect(asks(answer)).toBe(true);
   });
@@ -71,6 +72,9 @@ describe("classify", () => {
     expect(classify("Doktora Svobodu nenašel. Zkusíte obor, nebo město?", [{ name: "find_doctors" }])).toBe(
       "not_found",
     );
+    expect(
+      classify("Takového lékaře nemám. Znáte jeho křestní jméno?", [{ name: "find_doctors" }]),
+    ).toBe("not_found");
   });
 
   it("puts safety ahead of everything else", () => {

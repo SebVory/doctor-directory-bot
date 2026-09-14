@@ -26,8 +26,8 @@ Předpoklady, otevřené otázky a definice úspěchu jsou v
   └───────────────────┘   └──────────────────────────┘   └──────────────────┘
 ```
 
-Ingest je naplánovaná úloha, dva tools Skill, prompt konfigurace agenta, evals
-jejich evals. Preamble („Moment, podívám se") vracím zvlášť od odpovědi právě
+Ingest je naplánovaná úloha, dva tools Skill, prompt konfigurace agenta a evals
+jejich kontrola. Preamble („Moment, podívám se") vracím zvlášť od odpovědi právě
 proto, aby ho runtime přehrál během tool callu — tam se vnímaná latence
 schovává. Jak často stahovat je řádek v cronu a otázka na nemocnici, ne
 konstanta v kódu.
@@ -49,7 +49,8 @@ Skutečný průběh z eval běhu, 277 kandidátů na jednoho ve třech tazích:
 🤖 Mám ji: doktorka Alina Dumitrescu, psychiatrie, Clinica Cluj-Napoca Care
 ```
 
-Kontakt bot nenabídne sám, až když si o něj volající řekne.
+Kontakt bot sám nenabízí; telefon nebo adresu načte až poté, co si o ně
+volající výslovně řekne.
 
 ## Co je v datech
 
@@ -59,14 +60,16 @@ nikdy nekončí na jméně. Jméno, město a obor identifikují 99,1 %; zbylých
 řádků je 30 dvojic lišících se jen telefonem, adresou a jazyky, a na ty se bot
 ptá jazykem a řekne proč.
 
-Tři pasti. Klinik je 42 a měst 42 a jsou to bijekce („Clinica {město} Care"),
-takže otázka na kliniku je otázka na město jinými slovy — klinika je mimo sadu
-otázek. E-mail se odvozuje ze jména a kliniky, takže 616 skupin lékařů (některé
-po třech i čtyřech, dohromady 669 řádků nad rámec první v každé skupině) sdílí
-schránku; kontakt nese `email_shared` a bot řekne, že přímý je telefon. PSČ je
-náhodné (173 různých uvnitř Kluže), nepoužívá se.
+Tři pasti. Klinik je 42 a měst 42 a v plném snapshotu tvoří bijekci: každé
+město má jednu kliniku a každá klinika patří jednomu městu („Clinica {město}
+Care“). Neznamená to jednu kliniku na jednoho lékaře, naopak mnoho lékařů sdílí
+stejnou kliniku. Otázka na kliniku proto nepřinese nic navíc proti otázce na
+město a v sadě disambiguačních otázek není. E-mail se odvozuje ze jména a
+kliniky, takže 616 skupin lékařů (některé po třech i čtyřech, dohromady 669
+řádků nad rámec první v každé skupině) sdílí schránku; kontakt nese
+`email_shared` a bot řekne, že přímý je telefon. PSČ je náhodné (173 různých
+uvnitř Kluže), nepoužívá se.
 
-<!-- SEBASTIAN: rewrite in your own words -->
 ## Rozhodnutí
 
 **Nemocniční endpoint se nikdy nevolá během hovoru.** Odpovídá v řádu minut, takže
@@ -77,9 +80,10 @@ indexy i `meta` jsou uvnitř jednoho `db.transaction(...)`. Když validace nepro
 nebo počet řádků spadne pod 70 % předchozího, swap se neprovede, zůstává stará
 tabulka a bot umí říct, z kdy data jsou.
 
-**Identita lékařů se nemodeluje.** 616 skupin sdílí jméno i kliniku, ale liší se
-oborem, telefonem a adresou — proto je `id` jen per-snapshot hash, mění se s daty
-a nic na něj není navázané.
+**Identita lékařů se nemodeluje.** 616 skupin sdílí e-mail a některé kandidátní
+skupiny sdílejí stejné jméno i kliniku, ale liší se oborem, telefonem nebo
+adresou. Proto je `id` jen per-snapshot hash, mění se s daty a nic na něj není
+navázané.
 
 **Příjmení mají vlastní normalizaci.** České `-ová` nestálo správnost, ale
 jistotu: „Rusuová" sedlo na „Rusu" jen na 0,721, tedy pod prahem, takže by se bot
@@ -131,60 +135,59 @@ jména pod pět písmen. Vědomě neuděláno.
 **Co vědomě chybí:** shadow mode, monitoring, reálné STT/TTS, rate limiting
 a edge cases, které přinese až pilot.
 
-<!-- /SEBASTIAN -->
-
 ## Co mě naučily reálné přepisy
 
-Pustil jsem 43 skutečných přepisů z macOS diktování přes matcher offline a
-pak přes agenta. Offline to vypadalo na 31 z 38 a chyby v městech; živě
-spadlo 14 ze 43 a na úplně jiných věcech. Důvod je ten, že **model opraví
-poškození z přepisu dřív, než ho tool uvidí**:
+Pustil jsem 43 skutečných přepisů z macOS diktování přes matcher offline a pak
+přes agenta. Offline to vypadalo na 31 z 38, živě spadlo 14 ze 43 — a na úplně
+jiných věcech. Důvod byl, že model opravoval poškození z přepisu dřív, než ho
+tool uviděl: „Kůži" poslal jako „Kluž", „Santumare" jako „Satu Mare".
 
-```
-STT napsalo "Kůži"       → model poslal "Kluž"       → Cluj-Napoca
-STT napsalo "ploj testi" → model poslal "Ploješť"    → Ploiesti
-STT napsalo "Santumare"  → model poslal "Satu Mare"  → našel Andreje Rusu
-```
+Chvíli jsem to považoval za dobrou zprávu a matcher nechal být. Byla to
+unáhlená úvaha. Model ta jména neopravuje z dat — data nevidí — ale z toho, co
+zná o rumunských jménech z tréninku. Je to hádání z priorů, ne vyhledávání, a
+mělo dva důsledky. Když se trefil, dorazilo do storu čisté jméno se skóre 1,0 a
+větev „slyšel jsem správně?" nevystřelila ani jednou (`confirm_name 0` ve všech
+38 případech). Kdyby se netrefil a opravil na jiné existující rumunské příjmení,
+store by to vzal jako jistotu a bot by bez ptaní pojmenoval špatného lékaře — a
+v evals by to nebylo vidět, protože ve 38 případech se trefil pokaždé.
 
-Matcher jsem proto nechal být. Kdybych ho ladil podle offline tabulky,
-přidal bych složitost pro problém, který v provozu nenastává — `y→i` fold
-jsem změřil na 0,436 → 0,436, tedy nic. Výjimka je `Ilije` proti `Ilie`:
-0,000 nebylo omezení trigramů, ale chybějící řádek v transliterační tabulce,
-a po přidání `ije`/`ija` sedí na 1,000. Jedna výhrada: stojí to na tom, že
-model zná rumunská města. U menšího modelu by to neplatilo a matcher by tu
-práci musel odvést.
+**Současný návrh je proto opačný: model předává příjmení, křestní jméno a město
+doslova tak, jak zazněla, a hledání vlastní store**, který jediný vidí, jaká
+jména v datech jsou. Tím se pojistka vrací. Opravu měst, kterou model do té doby
+dělal zadarmo, musí od té chvíle umět matcher: města se porovnávají bez mezer, s
+nižším prahem než obory, a synonyma jsou vytažená z reálných přepisů (`kuzi`,
+`ploj testi`, `santumare`, `tam je svar`, `botan siker`), ne vymyšlená. Offline
+na 43 přepisech to posunulo 31/7 na 35/3, bez jediného falešného nálezu mezi
+devíti městy mimo síť a se všemi 42 městy, která pořád trefí sama sebe.
 
-Před opravami prošlo 19 ze 43 přepisů. Po nich prochází 35 z 38 případů —
-sady nejsou stejné (případy pokrývají i vícetahové hovory), takže to není
-poměr k poměru, ale směr je jasný.
+Se stejnou změnou padl i nižší práh pro potvrzení jména. Byl nastavený na 0,45,
+když do storu chodila jména už opravená a skóre se pohybovala u jedničky. S
+doslovným přepisem projde „stane zkus" na 0,579 a bez potvrzení by se přečetlo
+jako fakt. Práh je teď jeden, 0,6, ať volající řekl cokoli dalšího.
 
-Nejzajímavější nález celého kola je ale `confirm_name 0`: stejný mechanismus,
-který zachránil města, vyřadil bezpečnostní pojistku. Model opraví zkomolené
-příjmení dřív, než ho tool uvidí, takže nízké skóre, na kterém stojí větev
-„slyšel jsem správně?", do storu skoro nikdy nedorazí — a větev, která mě má
-chránit před špatným doktorem, v reálném hovoru nevystřelí. Návrh na další
-krok, neimplementovaný: tool dostane dvě pole, `surname_as_heard` doslova tak,
-jak to napsal přepis, a `surname_guess` s opravou modelu; store skóruje obě a
-když se oprava od slyšeného vzdálí, řekne to nahlas. Tím se pojistka vrátí a
-oprava měst zůstane.
+**První ověření proti API proběhlo, čistý závěrečný běh ještě čeká.** První běh
+nad novým návrhem měl 40 případů a aktivoval `confirm_name` čtyřikrát, včetně
+„stane zkus“. Tři červené případy nebyly chyba doslovného předávání ani matcheru:
+`čivu` a `Moldanová` měly staré očekávání z doby prahu 0,45 a jeden checker neuměl
+poznat legitimní otázku na křestní jméno. Tyto eval artefakty jsou opravené a další
+běh bude čistý výsledek pro [evals/RUNS.md](evals/RUNS.md).
 
-Čtyři věci, které živý běh vynutil. Bot potvrzoval jména, která vůbec nenašel
-— pacientovi, který řekl Popescu, nabídl Dumitrescu na 0,31; pod 0,40 teď
-žádný kandidát není. Pravidlo „nejmenuj jednoho z mnoha" bylo jen v promptu a
-model ho porušil u 186 kandidátů, takže je teď `must_ask` v datech. Přepis
-„restaurace" místo „doktorka" shodil hledání na odmítnutí. A práh pro potvrzení
-závisí na množství nezávislé evidence: samotné příjmení 0,6, s oborem, městem,
-jazykem nebo křestním jménem 0,45 — 0,50 uvnitř „pediatr v Brašově" je jiná
-jistota než 0,50 nad 7029 řádky.
+Čtyři věci, které živý běh vynutil dřív. Bot potvrzoval jména, která vůbec
+nenašel — pacientovi, který řekl Popescu, nabídl Dumitrescu na 0,31; pod 0,40
+teď žádný kandidát není. Pravidlo „nejmenuj jednoho z mnoha" bylo jen v promptu
+a model ho porušil u 186 kandidátů, takže je teď `must_ask` v datech. Přepis
+„restaurace" místo „doktorka" shodil hledání na odmítnutí.
 
 ## Testy a evals
 
 ```
 $ npm run typecheck && npm test
   Test Files  5 passed (5)
-       Tests  185 passed (185)
+       Tests  184 passed (184)
    Duration  259ms
 ```
+
+Historický běh před změnou na doslovné předávání do toolu:
 
 ```
 $ npm run evals          # 38 případů, 14. 9. 2026
@@ -202,16 +205,15 @@ outcome breakdown (what happened, not what was expected):
   other                0
 ```
 
-Tři případy spadly a všechny tři byly chyby v očekávání, ne v botovi: dva na
-tom, že model opraví zkomolené příjmení dřív, než ho tool uvidí, takže se
-nespustí potvrzování; jeden na tom, že případ držel staré pravidlo „kontakt
-nikdy v první odpovědi". Rozpis je v [evals/RUNS.md](evals/RUNS.md), kde je
-u každého běhu napsané, co byla chyba agenta a co chyba testu.
+Historický běh měl tři červené případy. Po změně promptu, prahu a checkeru ho
+nepoužívám jako finální skóre současného návrhu; nový čistý běh bude zapsaný v
+[evals/RUNS.md](evals/RUNS.md) včetně rozlišení chyby agenta, matcheru, case nebo
+checkeru.
 
-Za pozornost stojí `confirm_name 0`: cesta „slyšel jsem správně?" je pokrytá
-unit testy, ale v reálném hovoru se skoro nespustí, protože model komolení
-opraví sám. Buď je ta větev v provozu skoro mrtvá, nebo se spouští jen na
-komolení, která model neopraví — to zatím nevím.
+Offline měření pracovalo se 43 přepisy, starý agent eval měl 38 případů a
+současný eval má 40 případů. Nejde o stejný denominator: 43 je sada surových
+přepisů pro matcher, zatímco 38 a 40 jsou behaviorální scénáře pro agenta.
+
 ## Nastavení
 
 Potřebuješ Node 20 nebo novější (vyvíjeno na 22) a klíč k Anthropic API.
@@ -245,9 +247,9 @@ npm run doctor -- "Hledám doktora Dumitresku"
 | `npm run ingest` | Stáhne snapshot, zvaliduje Zodem, atomicky prohodí do `db/doctors.sqlite`; guardy na propad počtu řádků a na nevalidní řádky. |
 | `npm run doctor -- "dotaz"` | Jeden dotaz přes agenta. Bez argumentu interaktivní režim. |
 | `npm test` | Vitest: matcher (komolení z STT, synonyma, negativní případy) + guardy ingestu. |
-| `npm run evals` | Přehraje `evals/cases.json` přes agenta, kontroluje tool cally i odpověď, spadne pod 80 %. |
+| `npm run evals` | Přehraje `evals/cases.json` přes agenta, kontroluje tool cally i odpověď, spadne pod 80 %. Volá API, tedy stojí peníze. |
+| `npm run evals -- --validate-only` | Jen zkontroluje `cases.json` — hodnoty `behaviour`, názvy nástrojů, délky `turn_behaviours` — a skončí. Žádné volání API. |
 | `npm run typecheck` | `tsc --noEmit`. |
-
 
 ## Co vědomě chybí
 
@@ -256,9 +258,9 @@ pokrývají nejdůležitější tok, tedy doptání a kontakt až na vyžádán�
 
 Latence je změřená bez STT a TTS. V discovery jsem si dal cíl pod 1,5 s od
 konce věty do začátku odpovědi a **ten cíl zatím není splněný**: první token
-mluvené odpovědi přijde v průměru za 1,7 s (max 2,6 s), celý tah trvá kolem 7 s. Čísla v evals
-jsou za celý hovor, ne za tah — třítahový případ proto vychází přes 20 s.
-Model, effort, velikost payloadu ani prompt cache s tím měřitelně nehnuly;
+mluvené odpovědi přijde v průměru za 1,7 s (max 2,6 s), celý tah trvá kolem 7 s.
+Čísla v evals jsou za celý hovor, ne za tah — třítahový případ proto vychází přes
+20 s. Model, effort, velikost payloadu ani prompt cache s tím měřitelně nehnuly;
 zbývá streaming do TTS a přemosťovací věta, kterou zatím žádný runtime
 nepřehrává, protože runtime tu není.
 

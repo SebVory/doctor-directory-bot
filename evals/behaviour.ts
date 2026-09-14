@@ -19,11 +19,12 @@ export type Behaviour =
 
 /** out_of_scope is checked structurally, not by phrasing — see checkCase. */
 export const BEHAVIOUR_PATTERNS: Record<Exclude<Behaviour, "out_of_scope">, RegExp> = {
-  // Three shapes of "which one do you mean": an interrogative pronoun, a count of
-  // candidates, or an alternation ending in a question mark — the last is how the
-  // bot names best_question's options ("… Alina, Andrei, nebo Cristina?").
+  // Four shapes of "which one do you mean": an interrogative pronoun, a count of
+  // candidates, an alternation ending in a question mark (how the bot names
+  // best_question's options — "… Alina, Andrei, nebo Cristina?"), or a direct
+  // request for a name, which is what it asks when first_name is the question.
   ask_clarification:
-    /\b(ktereho|kterou|ktery|kterych|kterem)\b|\bmam (jich )?(dva|dve|tri|ctyri|pet|sest|sedm|osm|devet|deset|jedenact|dvanact|vic)\b|\bnebo\b[^?]*\?/,
+    /\b(ktereho|kterou|ktery|kterych|kterem)\b|\bmam (jich )?(dva|dve|tri|ctyri|pet|sest|sedm|osm|devet|deset|jedenact|dvanact|vic)\b|\bnebo\b[^?]*\?|\b(znate|vite|jake|jaky)\b[^?]*(krestni jmeno|jmeno)\b/,
   confirm_name: /\b(slysel|slysela|rozumel|rozumela) jsem spravne\b|\bmyslite (doktora|doktorku|pana|pani)\b/,
   // Czech negation carries the ending, so match the stem plus the endings a bot
   // actually produces: nemám/nemáme, nenašel/nenašla/nenašli, neznám/neznáme,

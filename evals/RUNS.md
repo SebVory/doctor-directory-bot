@@ -161,6 +161,50 @@ than with a flaky run.
 
 ---
 
+## 2026-09-14 — first API run after verbatim tool arguments
+
+**Purpose.** Verify the safety change: the model must pass `surname`,
+`first_name` and `city` verbatim to `find_doctors`; the store owns matching.
+This run also covers the withdrawn conditional confirmation threshold, now one
+`CONFIRM_THRESHOLD = 0.6`.
+
+**Result at execution time.** 37/40 passed (93%, threshold 80%).
+
+```text
+conversation ms avg 8731, max 20731
+TTFT avg 1781 ms, max 2833 ms (33 streamed)
+
+emergency            3
+contact              6
+confirm_name         4
+ask_clarification   18
+not_found            6
+out_of_scope         3
+found                0
+other                0
+```
+
+**What the run proved.**
+
+- `confirm_name` moved from 0 to 4.
+- `stane zkus` reached the read-back branch: "Slyšel jsem správně, že hledáte
+  doktora Stanescu?"
+- No case failed on an `args_include` mismatch.
+
+**Three failures, attributed after offline reproduction.**
+
+| Case | Result at execution time | Attribution | Resolution |
+|---|---|---|---|
+| `čivu`, paediatrician in Brasov | Expected `ask_clarification`; agent returned `confirm_name` | Case | `Chivu` scores 0.50, below the new single 0.6 threshold. Update expectation to `confirm_name`. |
+| `Vlada Moldanová` | Expected `ask_clarification`; agent returned `confirm_name` | Case | `Moldovan` scores 0.55, below 0.6. Update expectation to `confirm_name`. |
+| "Nevím co dělá, znám jenom jeho jméno" | Expected `ask_clarification`; answer was "Znáte jeho křestní jméno?" | Checker | Legitimate clarification question; extend the checker pattern and add regression tests. |
+
+**Follow-up.** The two case expectations and the checker were corrected without
+changing agent or store behaviour. A clean follow-up API run is required before
+presenting a final pass rate.
+
+---
+
 ## Next run
 
 The three case fixes above are unmeasured. The open question is whether

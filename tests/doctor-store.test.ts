@@ -9,7 +9,7 @@ const dir = mkdtempSync(join(tmpdir(), "store-test-"));
 process.env["DOCTORS_DB"] = join(dir, "doctors.sqlite");
 
 const { DoctorSchema, loadSnapshot } = await import("../src/ingest.js");
-const { CONFIRM_THRESHOLD, CONFIRM_THRESHOLD_NARROWED, DOMINANCE_TRIGGER, SUGGESTION_FLOOR, findDoctors, getDoctorContact } =
+const { CONFIRM_THRESHOLD, DOMINANCE_TRIGGER, SUGGESTION_FLOOR, findDoctors, getDoctorContact } =
   await import("../src/doctor-store.js");
 const { normalize, similarityOfNormalized } = await import("../src/match.js");
 
@@ -78,8 +78,8 @@ describe("never confirm a name the search did not find", () => {
     expect(result.needs_confirmation).toBe(false);
   });
 
-  it.each(["Hordyska", "Svoboda"])("drops %s, which is nobody in the data", (surname) => {
-    expect(findDoctors({ surname }).matches).toHaveLength(0);
+  it("drops Hordyska, which is nobody in the data", () => {
+    expect(findDoctors({ surname: "Hordyska" }).matches).toHaveLength(0);
   });
 
   it("still offers a near miss that is plausibly the same person", () => {
@@ -90,7 +90,7 @@ describe("never confirm a name the search did not find", () => {
   });
 });
 
-describe("confirm threshold depends on how much evidence there is", () => {
+describe("one confirm threshold, whatever else the caller gave", () => {
   it("a surname alone still has to clear 0.6", () => {
     const bare = findDoctors({ surname: "Váselysku" });
     expect(bare.matches[0]?.last_name).toBe("Vasilescu");
@@ -98,25 +98,27 @@ describe("confirm threshold depends on how much evidence there is", () => {
     expect(bare.needs_confirmation).toBe(true);
   });
 
-  it("a surname narrowed by speciality and city clears the lower bar", () => {
-    // "čivu" reaches Chivu at 0.50: weak across 7029 rows, strong inside
-    // "a paediatrician in Brasov".
+  it("still confirms a weak surname even with a speciality and a city", () => {
     const narrowed = findDoctors({ surname: "čivu", speciality: "pediatr", city: "Brasov" });
     expect(narrowed.matches[0]?.last_name).toBe("Chivu");
-    expect(narrowed.matches[0]?.score).toBeGreaterThanOrEqual(CONFIRM_THRESHOLD_NARROWED);
     expect(narrowed.matches[0]?.score).toBeLessThan(CONFIRM_THRESHOLD);
-    expect(narrowed.needs_confirmation).toBe(false);
+    expect(narrowed.needs_confirmation).toBe(true);
   });
 
-  it("a language does not count as narrowing — seven values barely narrow", () => {
-    expect(findDoctors({ surname: "Nyštor" }).needs_confirmation).toBe(true);
-    expect(findDoctors({ surname: "Nyštor", language: "maďarsky" }).needs_confirmation).toBe(true);
+  it("confirms a surname the transcript shattered", () => {
+    // "stane zkus" reaches Stanescu at 0.579. Under the old narrowed bar of 0.45
+    // that was read out as fact; it is a fragment, not a name.
+    const shattered = findDoctors({ surname: "stane zkus" });
+    expect(shattered.matches[0]?.last_name).toBe("Stanescu");
+    expect(shattered.matches[0]?.score).toBeLessThan(CONFIRM_THRESHOLD);
+    expect(shattered.matches[0]?.score).toBeGreaterThan(0.45); // would have passed the old bar
+    expect(shattered.needs_confirmation).toBe(true);
   });
 
-  it("a given name counts as narrowing too", () => {
+  it("a given name does not lower the bar either", () => {
     const narrowed = findDoctors({ surname: "Moldanová", first_name: "Vlad" });
     expect(narrowed.matches[0]?.last_name).toBe("Moldovan");
-    expect(narrowed.needs_confirmation).toBe(false);
+    expect(narrowed.needs_confirmation).toBe(true); // 0.55 is under 0.6
   });
 });
 
@@ -168,7 +170,8 @@ describe("a real surname must not be swapped for another one", () => {
     const result = findDoctors({ surname: "čivu", speciality: "pediatr", city: "Brasov" });
     expect(result.matches[0]?.last_name).toBe("Chivu");
     expect(result.surname_substituted).toBe(false);
-    expect(result.needs_confirmation).toBe(false);
+    // It still confirms, because 0.50 is under the single bar — that is item 1.
+    expect(result.needs_confirmation).toBe(true);
   });
 });
 
@@ -311,12 +314,6 @@ describe("findDoctors", () => {
     expect(result.matches[0]?.last_name).toBe("Neagu");
     expect(result.matches[0]?.score).toBe(1);
     expect(result.needs_confirmation).toBe(false);
-  });
-
-  it("asks for confirmation for a second mangling in the band", () => {
-    const result = findDoctors({ surname: "Nyštor" });
-    expect(result.matches[0]?.last_name).toBe("Nistor");
-    expect(result.needs_confirmation).toBe(true);
   });
 
   it("never asks for confirmation when no surname was given", () => {

@@ -46,6 +46,8 @@ type Case = {
     tool_on_turn?: { tool: string; turn: number };
     /** How many candidates the last find_doctors reported — 1 means it landed on one. */
     last_candidates?: number;
+    /** What the last find_doctors resolved the spoken terms to. */
+    resolved_includes?: { speciality?: string; city?: string; language?: string };
     args_include?: Record<string, string | null>;
     answer_includes?: string[];
     /** Answer must quote the snapshot date, ISO or Czech "D. M. YYYY". */
@@ -79,6 +81,7 @@ function checkCase(
   turnAnswers: string[],
   turnTools: string[][],
   lastCandidates: number | null,
+  lastResolved: { speciality: string | null; city: string | null; language: string | null } | null,
 ): string[] {
   const failures: string[] = [];
   const {
@@ -91,7 +94,18 @@ function checkCase(
     turn_behaviours,
     tool_on_turn,
     last_candidates,
+    resolved_includes,
   } = testCase.expect;
+
+  if (resolved_includes !== undefined) {
+    if (lastResolved === null) failures.push("resolved_includes: find_doctors never returned a result");
+    else {
+      for (const [field, want] of Object.entries(resolved_includes)) {
+        const got = lastResolved[field as keyof typeof lastResolved];
+        if (got !== want) failures.push(`resolved_includes: ${field} resolved to ${got ?? "null"}, expected ${want}`);
+      }
+    }
+  }
 
   if (last_candidates !== undefined) {
     if (lastCandidates === null) failures.push("last_candidates: find_doctors never returned a result");
@@ -249,6 +263,12 @@ if (runnable.length < cases.length) {
   console.error(`${cases.length - runnable.length} of ${cases.length} cases have an empty utterance — fill them in before running evals`);
   process.exit(1);
 }
+
+// After every gate a real run would hit, so "valid" means "this would run".
+if (process.argv.includes("--validate-only")) {
+  console.log(`${cases.length} cases valid`);
+  process.exit(0);
+}
 const results: {
   label: string;
   failures: string[];
@@ -271,6 +291,7 @@ for (const [index, testCase] of runnable.entries()) {
     const turnAnswers: string[] = [];
     const turnTools: string[][] = [];
     let lastCandidates: number | null = null;
+    let lastResolved: { speciality: string | null; city: string | null; language: string | null } | null = null;
     // Accumulated across the whole conversation, so tool_not_called means
     // "never called on this call", not "not on the last turn".
     const toolCalls: { name: string; input: Record<string, unknown> }[] = [];
@@ -290,6 +311,7 @@ for (const [index, testCase] of runnable.entries()) {
           language: str(call.input["language"]),
         });
         lastCandidates = found.candidates;
+        lastResolved = found.resolved;
       }
       toolCalls.push(...result.toolCalls);
     }
@@ -300,7 +322,7 @@ for (const [index, testCase] of runnable.entries()) {
       ttft,
       ms: Math.round(performance.now() - started),
       outcome: classify(answer, (turnTools.at(-1) ?? []).map((name) => ({ name }))),
-      failures: checkCase(testCase, answer, toolCalls, turnAnswers, turnTools, lastCandidates),
+      failures: checkCase(testCase, answer, toolCalls, turnAnswers, turnTools, lastCandidates, lastResolved),
     });
   } catch (error) {
     results.push({

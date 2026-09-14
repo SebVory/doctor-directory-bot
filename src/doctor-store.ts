@@ -9,16 +9,14 @@ import { normalize, normalizeSurname, resolveCity, resolveLanguage, resolveSpeci
  * Below this surname confidence the bot reads the name back before giving out
  * details. It lives here, not in the prompt, so it can be unit-tested and tuned
  * without touching Czech prose.
+ *
+ * One bar, whatever else the caller gave. A lower bar for queries narrowed by a
+ * speciality or a city was tried and withdrawn: it was calibrated while the model
+ * still repaired surnames before the tool saw them, so scores arrived near 1.0.
+ * With the transcript passed through verbatim, "stane zkus" reaches Stanescu at
+ * 0.579 and would have been read out as fact.
  */
 export const CONFIRM_THRESHOLD = 0.6;
-
-/**
- * With a surname alone, 0.6 is the right bar. Once the caller has also given a
- * speciality, a city or a given name, the same score means more: 0.5 inside
- * "a paediatrician in Brasov" is stronger evidence than 0.5 across 7029 rows,
- * because the prefilter already did most of the work.
- */
-export const CONFIRM_THRESHOLD_NARROWED = 0.45;
 
 /**
  * Below this, a candidate is not a worse guess — it is a different person. The
@@ -331,17 +329,11 @@ export function findDoctors(query: FindQuery): FindResult {
     hasNearExact ? entry.score >= DOMINANCE_FLOOR : entry.score > 0,
   );
 
-  // A speciality, city or given name alongside the surname is independent
-  // evidence, so the bar for acting without confirmation comes down. Language is
-  // not: seven values over 7029 rows barely narrows anything.
-  const narrowed = speciality !== null || city !== null || firstNorm !== null;
-  const confirmThreshold = narrowed ? CONFIRM_THRESHOLD_NARROWED : CONFIRM_THRESHOLD;
-
   // Once anything clears the confirm threshold, weaker rows are noise rather than
   // alternatives and must not reach the model — it is told how many candidates
   // there are and will name one. Below the threshold the best guess is offered
   // for confirmation, but only if it is close enough to be the same person.
-  const confident = plausibleScored.filter((entry) => entry.score >= confirmThreshold);
+  const confident = plausibleScored.filter((entry) => entry.score >= CONFIRM_THRESHOLD);
   const shortlist =
     confident.length > 0
       ? confident
@@ -379,7 +371,7 @@ export function findDoctors(query: FindQuery): FindResult {
 
   // Three independent reasons to read the name back before acting on it.
   const surnameUnsure =
-    surnameNorm !== null && top !== undefined && top.score < confirmThreshold;
+    surnameNorm !== null && top !== undefined && top.score < CONFIRM_THRESHOLD;
   const firstNameUnsure =
     firstNorm !== null && topEntry !== undefined && topEntry.firstScore < FIRST_NAME_CONFIRM;
   const surname_substituted =
