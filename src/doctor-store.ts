@@ -12,6 +12,15 @@ import { normalize, normalizeSurname, resolveCity, resolveLanguage, resolveSpeci
  */
 export const CONFIRM_THRESHOLD = 0.6;
 
+/**
+ * A wide net is right while the matcher is unsure — "Nyagu" should still reach
+ * "Neagu" at 0.4. It is wrong once something matches almost exactly: with 277
+ * spot-on Dumitrescus in hand, 288 Dumitrus at 0.765 are noise, and they corrupt
+ * both the shortlist and the disambiguating question.
+ */
+export const DOMINANCE_TRIGGER = 0.95;
+export const DOMINANCE_FLOOR = 0.85;
+
 export type DoctorMatch = {
   id: string;
   first_name: string;
@@ -104,6 +113,8 @@ export function bestQuestion(candidates: readonly CandidateAttributes[]): BestQu
 
 export type FindQuery = {
   surname?: string;
+  /** Given name, as heard. Scored the same fuzzy way as the surname. */
+  first_name?: string;
   speciality?: string;
   city?: string;
   language?: string;
@@ -112,7 +123,7 @@ export type FindQuery = {
 
 export type FindResult = {
   matches: DoctorMatch[];
-  /** How many rows survived the speciality/city/language prefilter. */
+  /** How many people the caller might plausibly mean, after scoring and dominance. */
   candidates: number;
   /** True when a surname was given but the best hit is under CONFIRM_THRESHOLD. */
   needs_confirmation: boolean;
@@ -146,6 +157,7 @@ type Row = {
   years_experience: number;
   rating: number;
   last_name_norm: string;
+  first_name_norm: string;
 };
 
 let cached: { db: Database.Database; locations: string[]; dataAsOf: string } | null = null;
@@ -186,22 +198,33 @@ export function findDoctors(query: FindQuery): FindResult {
   }
 
   const sql = `SELECT id, first_name, last_name, clinic_name, location, speciality,
-    languages_json, availability, years_experience, rating, last_name_norm
+    languages_json, availability, years_experience, rating, last_name_norm, first_name_norm
     FROM doctors${where.length > 0 ? ` WHERE ${where.join(" AND ")}` : ""}`;
   const rows = db.prepare(sql).all(...params) as Row[];
 
+  // Each name the caller gave contributes equally; with neither, everything ties
+  // at 1 and ranking falls through to rating.
   const surnameNorm = query.surname === undefined ? null : normalizeSurname(query.surname);
-  const scored = rows.map((row) => ({
-    row,
-    score: surnameNorm === null ? 1 : similarityOfNormalized(surnameNorm, row.last_name_norm),
-  }));
+  const firstNorm = query.first_name === undefined ? null : normalize(query.first_name);
+
+  const scored = rows.map((row) => {
+    const parts: number[] = [];
+    if (surnameNorm !== null) parts.push(similarityOfNormalized(surnameNorm, row.last_name_norm));
+    if (firstNorm !== null) parts.push(similarityOfNormalized(firstNorm, row.first_name_norm));
+    const score = parts.length === 0 ? 1 : parts.reduce((sum, p) => sum + p, 0) / parts.length;
+    return { row, score };
+  });
 
   // With a surname, confidence decides. Without one, the best-rated doctor is the
   // most useful thing to read out first.
   scored.sort((a, b) => b.score - a.score || b.row.rating - a.row.rating);
 
-  const matches = scored
-    .filter((entry) => entry.score > 0)
+  const hasNearExact = scored.some((entry) => entry.score >= DOMINANCE_TRIGGER);
+  const plausibleScored = scored.filter((entry) =>
+    hasNearExact ? entry.score >= DOMINANCE_FLOOR : entry.score > 0,
+  );
+
+  const matches = plausibleScored
     .slice(0, limit)
     .map(({ row, score }) => ({
       id: row.id,
@@ -219,11 +242,11 @@ export function findDoctors(query: FindQuery): FindResult {
 
   const top = matches[0];
   const needs_confirmation =
-    surnameNorm !== null && top !== undefined && top.score < CONFIRM_THRESHOLD;
+    (surnameNorm !== null || firstNorm !== null) && top !== undefined && top.score < CONFIRM_THRESHOLD;
 
   // Computed over every plausible candidate, not just the handful we read out —
   // 277 Dumitrescus need "which city", even though only three are returned.
-  const plausible = scored
+  const plausible = plausibleScored
     .filter((entry) => entry.score >= CONFIRM_THRESHOLD)
     .map(({ row }) => ({
       location: row.location,
@@ -235,7 +258,7 @@ export function findDoctors(query: FindQuery): FindResult {
 
   return {
     matches,
-    candidates: rows.length,
+    candidates: plausible.length,
     needs_confirmation,
     best_question: bestQuestion(plausible),
     resolved: { speciality, city, language },
