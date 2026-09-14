@@ -175,17 +175,14 @@ ověřit podílem tahů, ve kterých volající na otázku odpoví „nevím“.
 | Rusu | 283 | Matei | 255 |
 | Dobre | 283 | Enache | 256 |
 
-Z toho plyne, na co si dát pozor. Rozložení je skoro rovnoměrné: mezi
-nejčastějším a nejvzácnějším příjmením je rozdíl 17 %, takže neexistuje
-„snadný“ dotaz, na kterém by hledání vyšlo samo, a každé měření na vzorku platí
-i jinde. Nebezpečné jsou naopak dvojice, které se liší jedním písmenem nebo
-jednou slabikou a obě v datech skutečně existují: Stan, Stancu a Stanescu,
-Dumitru a Dumitrescu, Popa a Popescu. Zkomolený přepis mezi nimi přeskočí
-snadno, a protože obě jména existují, matcher nemá jak poznat, že sáhl vedle.
-Přesně proto je v tool výsledku `surname_substituted`: když volající řekl
-příjmení, které v seznamu je, a nejlepší nález nese jiné, bot to musí říct
-nahlas a nesmí ho podstrčit jako hledaného. Krátká příjmení jsou na tom nejhůř,
-protože mají málo trigramů, na kterých se dá stavět.
+Z toho plyne, na co si dát pozor. Rozložení je skoro rovnoměrné, mezi
+nejčastějším a nejvzácnějším příjmením je 17 %, takže žádný dotaz není „snadný"
+a měření na vzorku platí i jinde. Nebezpečné jsou dvojice, které se liší slabikou
+a obě v datech existují: Stan, Stancu a Stanescu, Dumitru a Dumitrescu, Popa
+a Popescu. Přeslech mezi nimi matcher nepozná, obě jména jsou pravá, a proto tool
+vrací `surname_substituted`: volající řekl příjmení ze seznamu, nález nese jiné,
+bot to musí říct nahlas a nesmí ho podstrčit. Krátká příjmení jsou na tom nejhůř,
+mají málo trigramů.
 
 Dvě třetiny lékařů (66 %) mluví víc než jedním jazykem, což je druhá polovina
 důvodu, proč je jazyk poslední otázka: nejen že řeže málo, ale ani odpověď
@@ -229,15 +226,14 @@ mrtvice končí jedinou větou „Volejte okamžitě 155." Žádné volání ná
 hledání lékaře, nic dalšího.
 
 Není to jen instrukce v promptu, na tom jsme jednou prohráli. Rozpoznané
-formulace se vyhodnocují **před** modelem (`src/emergency.ts`) a vrací pevnou
-větu bez jediného tokenu; model je druhá vrstva pro to, co seznam nezná, a za ním
-je ještě clamp, který jeho emergency odpověď zkrátí na tu samou větu. Seznam
-záměrně necílí na jednotlivá slova, ale na kombinace, takže „Děda měl loni
-mrtvici, hledám neurologa" nebo „krvácení z nosu" pořád vedou na normální
-hledání. Falešný poplach znamená „zavolejte 155"; falešné ticho znamená, že
-někdo s krvácením mluví s adresářem, a proto je práh nastavený tímhle směrem.
-Neakutní potíže naopak vedou na nabídku oboru: „Bolest hlavy neumím posoudit ani
-léčit. Můžu vám ale najít neurologa nebo praktického lékaře."
+formulace se vyhodnotí **před** modelem (`src/emergency.ts`) a vrátí pevnou větu
+bez jediného tokenu; model je druhá vrstva pro to, co seznam nezná, a za ním
+clamp, který jeho emergency odpověď zkrátí na tutéž větu. Seznam cílí na
+kombinace, ne na slova, takže „Děda měl loni mrtvici, hledám neurologa"
+i „krvácení z nosu" pořád vedou na hledání. Falešný poplach je „zavolejte 155",
+falešné ticho je někdo s krvácením u adresáře, a tím směrem je práh nastavený.
+Neakutní potíže vedou na nabídku oboru: „Bolest hlavy neumím posoudit ani léčit.
+Můžu vám ale najít neurologa nebo praktického lékaře."
 
 **8. Kontakt až na vyžádání.** Telefon ani adresa nejdou do odpovědi samy od
 sebe, jsou za samostatným toolem, který se volá, teprve když si o ně volající
