@@ -13,7 +13,7 @@ Předpoklady, otevřené otázky a definice úspěchu jsou v
 [DISCOVERY.md](DISCOVERY.md), měření a rozhodnutí z nich v
 [DECISIONS.md](DECISIONS.md).
 
-## 3min summary
+## 3 min summary
 
 **Co jsem postavil.** Hlasový directory bot nad nemocničním endpointem, který
 vrací celý seznam až za deset minut. Během hovoru endpoint nevolá: plánovaný
