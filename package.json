@@ -1,0 +1,31 @@
+{
+  "name": "doctor-directory-bot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "mock-api": "tsx src/mock-hospital-api.ts",
+    "ingest": "tsx src/ingest.ts",
+    "doctor": "tsx src/doctor-agent.ts",
+    "test": "vitest run",
+    "evals": "tsx evals/run.ts",
+    "typecheck": "tsc --noEmit",
+    "sample": "tsx scripts/make-sample.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.124.0",
+    "better-sqlite3": "^13.0.3",
+    "dotenv": "^17.4.2",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.5.0",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
