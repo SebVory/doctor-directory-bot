@@ -27,6 +27,9 @@ export const TRANSLITERATIONS: ReadonlyArray<readonly [string, string]> = [
   // Romanian g = /dʒ/ before e, i; Czech writes dž -> dz after folding
   ["ge", "dze"],
   ["gi", "dzi"],
+  ["ije", "je"],
+  ["ija", "ja"],
+  ["ya", "a"],
   // Diphthongs a Czech ear flattens
   ["ea", "a"],
   ["oa", "o"],
