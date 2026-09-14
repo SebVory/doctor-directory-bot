@@ -277,7 +277,14 @@ export function findDoctors(query: FindQuery): FindResult {
     hasNearExact ? entry.score >= DOMINANCE_FLOOR : entry.score > 0,
   );
 
-  const matches = plausibleScored
+  // Once anything clears the confirm threshold, weaker rows are noise rather than
+  // alternatives and must not reach the model — it is told how many candidates
+  // there are and will name one. Below the threshold the best guess is all we
+  // have, and the bot reads the name back instead of acting on it.
+  const confident = plausibleScored.filter((entry) => entry.score >= CONFIRM_THRESHOLD);
+  const shortlist = confident.length > 0 ? confident : plausibleScored;
+
+  const matches = shortlist
     .slice(0, limit)
     .map(({ row, score }) => ({
       id: row.id,
@@ -299,9 +306,7 @@ export function findDoctors(query: FindQuery): FindResult {
 
   // Computed over every plausible candidate, not just the handful we read out —
   // 277 Dumitrescus need "which city", even though only three are returned.
-  const plausible = plausibleScored
-    .filter((entry) => entry.score >= CONFIRM_THRESHOLD)
-    .map(({ row }) => ({
+  const plausible = confident.map(({ row }) => ({
       last_name: row.last_name,
       location: row.location,
       speciality: row.speciality,

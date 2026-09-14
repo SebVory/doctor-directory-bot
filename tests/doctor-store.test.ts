@@ -70,6 +70,68 @@ describe("first name scoring", () => {
   });
 });
 
+describe("shortlist consistency", () => {
+  /**
+   * The bug this guards: matches was sliced straight off the scored rows, while
+   * candidates and best_question counted only rows at or above the threshold. A
+   * narrow prefilter left one confident hit plus unrelated surnames far below it,
+   * and the model was told "1 candidate, no confirmation needed" while holding a
+   * list it could read the wrong name from.
+   */
+  function narrowSpot(surname: string): { location: string; speciality: string } | null {
+    const groups = new Map<string, number>();
+    for (const row of rows) {
+      if (row.last_name !== surname) continue;
+      const key = `${row.location}|${row.speciality}`;
+      groups.set(key, (groups.get(key) ?? 0) + 1);
+    }
+    for (const [key, n] of groups) {
+      if (n !== 1) continue;
+      const [location, speciality] = key.split("|");
+      if (location !== undefined && speciality !== undefined) return { location, speciality };
+    }
+    return null;
+  }
+
+  it("never ships a below-threshold name once something clears the threshold", () => {
+    // "Džordžesku" lands on Georgescu around 0.75: past the confirm threshold,
+    // short of the dominance trigger — exactly the window that leaked.
+    const spot = narrowSpot("Georgescu");
+    expect(spot).not.toBeNull();
+    if (spot === null) return;
+
+    const result = findDoctors({ surname: "Džordžesku", ...spot });
+    expect(result.matches.length).toBeGreaterThan(0);
+    expect(result.matches[0]?.last_name).toBe("Georgescu");
+    expect(result.matches.filter((m) => m.score < CONFIRM_THRESHOLD)).toEqual([]);
+    expect(result.matches).toHaveLength(result.candidates);
+  });
+
+  it("keeps matches and candidates in step across query shapes", () => {
+    const queries = [
+      { surname: "Dumitresku" },
+      { surname: "Džordžesku" },
+      { surname: "Dumitresku", speciality: "psychiatr" },
+      { speciality: "kardiolog" },
+    ];
+    for (const query of queries) {
+      const result = findDoctors(query);
+      if (result.candidates === 0) continue; // the confirm path, asserted below
+      expect(result.matches.filter((m) => m.score < CONFIRM_THRESHOLD)).toEqual([]);
+      expect(result.matches.length).toBeLessThanOrEqual(result.candidates);
+    }
+  });
+
+  it("still returns the best guess when nothing clears the threshold", () => {
+    // Otherwise the bot has no name to read back and cannot confirm.
+    const result = findDoctors({ surname: "Nyštor" });
+    expect(result.candidates).toBe(0);
+    expect(result.matches.length).toBeGreaterThan(0);
+    expect(result.matches[0]?.last_name).toBe("Nistor");
+    expect(result.needs_confirmation).toBe(true);
+  });
+});
+
 describe("exact-match dominance", () => {
   it("drops the near-miss surnames once something matches almost exactly", () => {
     // "Dumitresku" also pulls "Dumitru" in at ~0.77. With exact Dumitrescu hits
