@@ -51,6 +51,13 @@ Hard cases belong in `evals/cases.json` as utterances, **not** as curated rows i
 data file. A data file stuffed with only hard cases makes every score meaningless —
 difficulty and representativeness are separate axes and need separate files.
 
+## Where the reasoning lives
+
+`DECISIONS.md` records what was measured, what it showed and what was decided
+because of it — including ideas that were measured and rejected. Add to it when a
+decision rests on a number rather than on taste, and keep the number in the entry.
+Commit messages carry the same reasoning for the change they ship.
+
 ## Project conventions
 
 - ESM, `strict` + `noUncheckedIndexedAccess`. No `any`, no non-null `!`.
