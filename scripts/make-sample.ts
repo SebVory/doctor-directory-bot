@@ -85,9 +85,13 @@ for (const indices of [...byCollision.values()].filter((g) => g.length > 1).slic
 }
 
 // Fill the rest with an even stride across the whole file, so the sample keeps
-// the shape of the data rather than the shape of its first N rows.
+// the shape of the data rather than the shape of its first N rows. Striding can
+// land on rows already pinned, so sweep with a widening offset until the target
+// is met exactly — "about 500" in a committed fixture invites drift.
 const stride = Math.max(1, Math.floor(rows.length / Math.max(1, TARGET - picked.size)));
-for (let i = 0; i < rows.length && picked.size < TARGET; i += stride) picked.add(i);
+for (let offset = 0; offset < stride && picked.size < TARGET; offset++) {
+  for (let i = offset; i < rows.length && picked.size < TARGET; i += stride) picked.add(i);
+}
 
 const sample = [...picked]
   .sort((a, b) => a - b)

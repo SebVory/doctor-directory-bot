@@ -6,8 +6,14 @@ import { readFileSync } from "node:fs";
 import Database from "better-sqlite3";
 import { FALLBACK_ANSWER, runTurn } from "../src/doctor-agent.js";
 import { DB_PATH } from "../src/ingest.js";
+import { findDoctors } from "../src/doctor-store.js";
+
+/** Tool arguments arrive as string | null; the store wants string | undefined. */
+const str = (v: unknown): string | undefined => (typeof v === "string" && v.trim().length > 0 ? v : undefined);
 import {
   BEHAVIOUR_PATTERNS,
+  mentionsDate,
+  namesADoctor,
   type Behaviour,
   EMERGENCY_MAX_CHARS,
   OUTCOMES,
@@ -38,6 +44,8 @@ type Case = {
     tool_not_called?: string;
     /** A tool that must be called on one specific turn (1-indexed), not just somewhere. */
     tool_on_turn?: { tool: string; turn: number };
+    /** How many candidates the last find_doctors reported — 1 means it landed on one. */
+    last_candidates?: number;
     args_include?: Record<string, string | null>;
     answer_includes?: string[];
     /** Answer must quote the snapshot date, ISO or Czech "D. M. YYYY". */
@@ -63,20 +71,6 @@ function caseLabel(testCase: Case): string {
   return turns.length > 1 ? `… ${last}` : last;
 }
 
-/** Does the answer quote the snapshot date in either accepted form? */
-function mentionsDataAsOf(answer: string): boolean {
-  if (DATA_AS_OF === "") return false;
-  if (answer.includes(DATA_AS_OF.slice(0, 10))) return true; // 2026-09-11
-
-  // The model speaks the local date; after ~22:00 CEST that is a day ahead of UTC,
-  // so both are accepted rather than failing the case on a timezone boundary.
-  const date = new Date(DATA_AS_OF);
-  const forms = [
-    [date.getUTCDate(), date.getUTCMonth() + 1, date.getUTCFullYear()],
-    [date.getDate(), date.getMonth() + 1, date.getFullYear()],
-  ];
-  return forms.some(([d, m, y]) => new RegExp(`\\b${d}\\.\\s*${m}\\.\\s*${y}\\b`).test(answer));
-}
 
 function checkCase(
   testCase: Case,
@@ -84,6 +78,7 @@ function checkCase(
   toolCalls: { name: string; input: Record<string, unknown> }[],
   turnAnswers: string[],
   turnTools: string[][],
+  lastCandidates: number | null,
 ): string[] {
   const failures: string[] = [];
   const {
@@ -95,7 +90,15 @@ function checkCase(
     behaviour,
     turn_behaviours,
     tool_on_turn,
+    last_candidates,
   } = testCase.expect;
+
+  if (last_candidates !== undefined) {
+    if (lastCandidates === null) failures.push("last_candidates: find_doctors never returned a result");
+    else if (lastCandidates !== last_candidates) {
+      failures.push(`last_candidates: expected ${last_candidates}, the last search reported ${lastCandidates}`);
+    }
+  }
 
   if (tool_on_turn !== undefined) {
     const onThatTurn = turnTools[tool_on_turn.turn - 1];
@@ -105,6 +108,10 @@ function checkCase(
       failures.push(
         `tool_on_turn: expected ${tool_on_turn.tool} on turn ${tool_on_turn.turn}, that turn called ${onThatTurn.join(", ") || "nothing"}`,
       );
+    }
+    const early = turnTools.slice(0, tool_on_turn.turn - 1).findIndex((t) => t.includes(tool_on_turn.tool));
+    if (early >= 0) {
+      failures.push(`tool_on_turn: ${tool_on_turn.tool} was already called on turn ${early + 1}`);
     }
   }
 
@@ -154,21 +161,32 @@ function checkCase(
     if (!fold(answer).includes(fold(needle))) failures.push(`answer missing "${needle}"`);
   }
 
-  if (answer_includes_data_as_of === true && !mentionsDataAsOf(answer)) {
+  if (answer_includes_data_as_of === true && !mentionsDate(answer, DATA_AS_OF)) {
     failures.push(`answer does not quote data_as_of (${DATA_AS_OF.slice(0, 10)} or "${new Date(DATA_AS_OF).getUTCDate()}. ${new Date(DATA_AS_OF).getUTCMonth() + 1}. ${new Date(DATA_AS_OF).getUTCFullYear()}")`);
   }
 
   if (behaviour === "out_of_scope") {
     // Deterministic, not phrasing-based: touched no data, named nobody, stayed short.
-    if (toolCalls.length > 0) {
-      failures.push(`out_of_scope: called ${toolCalls.map((c) => c.name).join(", ")} — must not touch the snapshot`);
+    // Judged on the closing turn: a conversation may search and then end out of scope.
+    const lastTurnTools = turnTools.at(-1) ?? [];
+    if (lastTurnTools.length > 0) {
+      failures.push(`out_of_scope: last turn called ${lastTurnTools.join(", ")} — must not touch the snapshot`);
     }
-    const named = SURNAMES.filter((surname) => new RegExp(`\\b${fold(surname)}\\b`).test(fold(answer)));
+    // Matched on the raw answer against the capitalised surname: folding turns
+    // the commonest Czech adverb, "dobře", into the surname "Dobre".
+    const named = namesADoctor(answer, SURNAMES);
     if (named.length > 0) {
       failures.push(`out_of_scope: answer names doctors (${named.join(", ")})`);
     }
     if (answer.length >= 200) {
       failures.push(`out_of_scope: answer is ${answer.length} chars, must stay under 200`);
+    }
+  } else if (behaviour === "ask_clarification") {
+    // "Nemám ho, chcete obor, nebo město?" is a refusal wearing a question mark.
+    if (!BEHAVIOUR_PATTERNS.ask_clarification.test(fold(answer))) {
+      failures.push("expected behaviour ask_clarification");
+    } else if (BEHAVIOUR_PATTERNS.not_found.test(fold(answer))) {
+      failures.push("expected ask_clarification but the answer also reads as not_found");
     }
   } else if (behaviour !== undefined && !BEHAVIOUR_PATTERNS[behaviour].test(fold(answer))) {
     failures.push(`expected behaviour ${behaviour}`);
@@ -185,10 +203,33 @@ const CASES_FILE = process.env["CASES_FILE"] ?? "./evals/cases.json";
 const cases = JSON.parse(readFileSync(CASES_FILE, "utf8")) as Case[];
 
 const KNOWN_BEHAVIOURS = new Set<string>([...Object.keys(BEHAVIOUR_PATTERNS), "out_of_scope"]);
+const KNOWN_TOOLS = new Set(["find_doctors", "get_doctor_contact"]);
+
+// Every assertion is checked against the vocabulary before a single call is
+// billed: a typo in a tool name would otherwise pass silently for ever.
+function invalid(testCase: Case): string | null {
+  const { behaviour, turn_behaviours, tool, tool_not_called, tool_on_turn } = testCase.expect;
+  if (behaviour !== undefined && !KNOWN_BEHAVIOURS.has(behaviour)) return `unknown behaviour ${behaviour}`;
+  for (const value of turn_behaviours ?? []) {
+    if (value !== null && !KNOWN_BEHAVIOURS.has(value)) return `unknown turn behaviour ${value}`;
+  }
+  for (const [label, value] of [["tool", tool], ["tool_not_called", tool_not_called], ["tool_on_turn.tool", tool_on_turn?.tool]] as const) {
+    if (value !== undefined && !KNOWN_TOOLS.has(value)) return `unknown tool in ${label}: ${value}`;
+  }
+  const turns = caseTurns(testCase).length;
+  if (turn_behaviours !== undefined && turn_behaviours.length !== turns) {
+    return `turn_behaviours has ${turn_behaviours.length} entries for ${turns} turns`;
+  }
+  if (tool_on_turn !== undefined && (tool_on_turn.turn < 1 || tool_on_turn.turn > turns)) {
+    return `tool_on_turn.turn ${tool_on_turn.turn} is outside 1..${turns}`;
+  }
+  return null;
+}
+
 for (const [index, testCase] of cases.entries()) {
-  const behaviour: unknown = testCase.expect.behaviour;
-  if (behaviour !== undefined && !KNOWN_BEHAVIOURS.has(String(behaviour))) {
-    console.error(`case ${index + 1}: unknown behaviour ${JSON.stringify(behaviour)} — expected one of ${[...KNOWN_BEHAVIOURS].join(", ")}`);
+  const problem = invalid(testCase);
+  if (problem !== null) {
+    console.error(`case ${index + 1}: ${problem}`);
     process.exit(1);
   }
 }
@@ -214,6 +255,7 @@ const results: {
   answer: string;
   preamble: string;
   ms: number;
+  ttft: number | null;
   outcome: Outcome;
 }[] = [];
 
@@ -225,8 +267,10 @@ for (const [index, testCase] of runnable.entries()) {
     let history: Awaited<ReturnType<typeof runTurn>>["messages"] = [];
     let answer = "";
     let preamble = "";
+    let ttft: number | null = null;
     const turnAnswers: string[] = [];
     const turnTools: string[][] = [];
+    let lastCandidates: number | null = null;
     // Accumulated across the whole conversation, so tool_not_called means
     // "never called on this call", not "not on the last turn".
     const toolCalls: { name: string; input: Record<string, unknown> }[] = [];
@@ -235,23 +279,35 @@ for (const [index, testCase] of runnable.entries()) {
       history = result.messages;
       answer = result.answer;
       preamble = result.preamble;
+      if (result.ttft_ms !== null) ttft = result.ttft_ms;
       turnAnswers.push(result.answer);
       turnTools.push(result.toolCalls.map((c) => c.name));
+      for (const call of result.toolCalls) {
+        if (call.name !== "find_doctors") continue;
+        const found = findDoctors({
+          surname: str(call.input["surname"]), first_name: str(call.input["first_name"]),
+          speciality: str(call.input["speciality"]), city: str(call.input["city"]),
+          language: str(call.input["language"]),
+        });
+        lastCandidates = found.candidates;
+      }
       toolCalls.push(...result.toolCalls);
     }
     results.push({
       label: caseLabel(testCase),
       answer,
       preamble,
+      ttft,
       ms: Math.round(performance.now() - started),
-      outcome: classify(answer, toolCalls),
-      failures: checkCase(testCase, answer, toolCalls, turnAnswers, turnTools),
+      outcome: classify(answer, (turnTools.at(-1) ?? []).map((name) => ({ name }))),
+      failures: checkCase(testCase, answer, toolCalls, turnAnswers, turnTools, lastCandidates),
     });
   } catch (error) {
     results.push({
       label: caseLabel(testCase),
       answer: "",
       preamble: "",
+      ttft: null,
       ms: Math.round(performance.now() - started),
       outcome: "other",
       failures: [`threw: ${String(error)}`],
@@ -274,8 +330,13 @@ const score = results.length === 0 ? 0 : passed / results.length;
 const times = results.map((r) => r.ms);
 const avgMs = times.length === 0 ? 0 : Math.round(times.reduce((a, b) => a + b, 0) / times.length);
 const maxMs = times.length === 0 ? 0 : Math.max(...times);
+const ttfts = results.map((r) => r.ttft).filter((t): t is number => t !== null);
+const ttftAvg = ttfts.length === 0 ? 0 : Math.round(ttfts.reduce((a, b) => a + b, 0) / ttfts.length);
+const ttftMax = ttfts.length === 0 ? 0 : Math.max(...ttfts);
 console.log(
-  `\n${passed}/${results.length} passed — ${(score * 100).toFixed(0)}% (threshold ${PASS_THRESHOLD * 100}%) · latency avg ${avgMs} ms, max ${maxMs} ms`,
+  `\n${passed}/${results.length} passed — ${(score * 100).toFixed(0)}% (threshold ${PASS_THRESHOLD * 100}%)` +
+    ` · conversation ms avg ${avgMs}, max ${maxMs}` +
+    (ttfts.length === 0 ? "" : ` · TTFT avg ${ttftAvg} ms, max ${ttftMax} ms (${ttfts.length} streamed)`),
 );
 
 console.log("\noutcome breakdown (what happened, not what was expected):");

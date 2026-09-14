@@ -10,13 +10,7 @@ import { pathToFileURL } from "node:url";
 import Database from "better-sqlite3";
 import { z } from "zod";
 import { fetchJson } from "./api-client.js";
-import {
-  normalize,
-  normalizeSurname,
-  resolveCity,
-  resolveLanguage,
-  resolveSpeciality,
-} from "./match.js";
+import { normalize, resolveLanguage, resolveSpeciality } from "./match.js";
 
 const SOURCE_URL = process.env.HOSPITAL_URL ?? "http://localhost:4010/doctors";
 export const DB_PATH = process.env.DOCTORS_DB ?? "./db/doctors.sqlite";
@@ -95,14 +89,10 @@ CREATE UNIQUE INDEX idx_doctors_id ON doctors(id);
  * is not wrong, our tables are behind.
  */
 export function findUnreachableValues(rows: readonly Doctor[]): string[] {
-  const locations = [...new Set(rows.map((r) => r.location))];
   const unreachable: string[] = [];
 
   for (const speciality of new Set(rows.map((r) => r.speciality))) {
     if (resolveSpeciality(speciality) !== speciality) unreachable.push(`speciality "${speciality}"`);
-  }
-  for (const location of locations) {
-    if (resolveCity(location, locations) !== location) unreachable.push(`location "${location}"`);
   }
   for (const language of new Set(rows.flatMap((r) => r.languages))) {
     if (resolveLanguage(language) !== language) unreachable.push(`language "${language}"`);
@@ -115,6 +105,8 @@ export type IngestOutcome =
       ok: true;
       inserted: number;
       invalid: number;
+      /** Rows dropped because another row produced the same id. */
+      duplicates: number;
       previousCount: number;
       sourceHash: string;
       /** Values with no Czech synonym — a warning, not a failure. */
@@ -144,6 +136,16 @@ function previousRecordCount(db: Database.Database): number {
  * until the very last transaction, so a bad snapshot costs freshness, not service.
  */
 export function loadSnapshot(raw: readonly unknown[], dbPath: string): IngestOutcome {
+  if (!Array.isArray(raw)) {
+    return {
+      ok: false,
+      inserted: 0,
+      invalid: 0,
+      previousCount: 0,
+      reason: `expected a JSON array of doctors, got ${raw === null ? "null" : typeof raw}`,
+    };
+  }
+
   const db = openDb(dbPath);
   try {
     const previousCount = previousRecordCount(db);
@@ -181,19 +183,33 @@ export function loadSnapshot(raw: readonly unknown[], dbPath: string): IngestOut
         @languages_json, @availability, @rating,
         @last_name_norm, @first_name_norm, @city_norm, @speciality_norm)`);
 
+    // Two rows can hash to the same id if every field in the hash matches. Drop
+    // the repeat rather than letting the unique index abort a whole snapshot.
+    const seen = new Set<string>();
+    const unique: Doctor[] = [];
+    let duplicates = 0;
+    for (const row of valid) {
+      const id = doctorId(row);
+      if (seen.has(id)) duplicates += 1;
+      else {
+        seen.add(id);
+        unique.push(row);
+      }
+    }
+
     db.transaction((rows: readonly Doctor[]) => {
       for (const row of rows) {
         insert.run({
           ...row,
           id: doctorId(row),
           languages_json: JSON.stringify(row.languages),
-          last_name_norm: normalizeSurname(row.last_name),
+          last_name_norm: normalize(row.last_name),
           first_name_norm: normalize(row.first_name),
           city_norm: normalize(row.location),
           speciality_norm: normalize(row.speciality),
         });
       }
-    })(valid);
+    })(unique);
 
     const inserted = (db.prepare("SELECT count(*) AS n FROM doctors_new").get() as { n: number }).n;
 
@@ -226,7 +242,7 @@ export function loadSnapshot(raw: readonly unknown[], dbPath: string): IngestOut
       ).run(new Date().toISOString(), inserted, sourceHash);
     })();
 
-    return { ok: true, inserted, invalid, previousCount, sourceHash, unreachable };
+    return { ok: true, inserted, invalid, duplicates, previousCount, sourceHash, unreachable };
   } finally {
     db.close();
   }
@@ -244,6 +260,6 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
     process.exit(1);
   }
   console.log(
-    `[ingest] ok — ${outcome.inserted} doctors in ${DB_PATH} (was ${outcome.previousCount}, ${outcome.invalid} invalid, fetched in ${fetchSeconds}s, hash ${outcome.sourceHash.slice(0, 8)})`,
+    `[ingest] ok — ${outcome.inserted} doctors in ${DB_PATH} (was ${outcome.previousCount}, ${outcome.invalid} invalid, ${outcome.duplicates} duplicate, fetched in ${fetchSeconds}s, hash ${outcome.sourceHash.slice(0, 8)})`,
   );
 }

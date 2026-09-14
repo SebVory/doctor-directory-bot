@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { type MessagesClient, runTurn } from "../src/doctor-agent.js";
 
 /** Minimal stand-in for one API response. */
@@ -93,5 +93,26 @@ describe("runTurn history", () => {
     });
     expect(assistantText(result.messages)).toHaveLength(1);
     expect(result.answer).toMatch(/Omlouvám se/);
+  });
+});
+
+describe("tool failures", () => {
+  it("answers with the fallback line instead of throwing when the snapshot is missing", async () => {
+    const previous = process.env["DOCTORS_DB"];
+    process.env["DOCTORS_DB"] = "/nonexistent/path/doctors.sqlite";
+    const warn = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const search = { type: "tool_use", id: "t1", name: "find_doctors", input: { surname: "Rusu" } } as Anthropic.ContentBlock;
+      const result = await runTurn("Hledám doktorku Rusu", [], {
+        trace: false,
+        client: scripted([reply([search], "tool_use"), reply([], "end_turn")]),
+      });
+      expect(result.answer).toMatch(/Omlouvám se/);
+      expect(result.toolCalls.map((c) => c.name)).toEqual(["find_doctors"]);
+    } finally {
+      warn.mockRestore();
+      if (previous === undefined) delete process.env["DOCTORS_DB"];
+      else process.env["DOCTORS_DB"] = previous;
+    }
   });
 });

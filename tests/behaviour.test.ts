@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BEHAVIOUR_PATTERNS, classify, fold } from "../evals/behaviour.js";
+import { BEHAVIOUR_PATTERNS, classify, fold, mentionsDate, namesADoctor } from "../evals/behaviour.js";
 
 const notFound = (s: string): boolean => BEHAVIOUR_PATTERNS.not_found.test(fold(s));
 
@@ -75,5 +75,57 @@ describe("classify", () => {
 
   it("puts safety ahead of everything else", () => {
     expect(classify("Volejte 155.", [{ name: "get_doctor_contact" }])).toBe("emergency");
+  });
+});
+
+describe("emergency pattern", () => {
+  const isEmergency = (s: string): boolean => BEHAVIOUR_PATTERNS.emergency.test(fold(s));
+
+  it("matches a real instruction to call 155", () => {
+    expect(isEmergency("Volejte okamžitě 155.")).toBe(true);
+  });
+
+  it.each([
+    "Telefon je +40-243-864-155.",
+    "Telefon je 155284433.",
+  ])("does not fire on %j", (answer) => {
+    expect(isEmergency(answer)).toBe(false);
+  });
+});
+
+describe("checker robustness", () => {
+  it("does not read the adverb 'dobře' as the surname Dobre", () => {
+    // Both fold to "dobre", so the check has to run on the raw answer.
+    expect(namesADoctor("Dobrý den, slyším vás dobře. Koho pro vás mám najít?", ["Dobre"])).toEqual([]);
+  });
+
+  it("still spots a surname the bot actually named", () => {
+    expect(namesADoctor("Mám tam doktorku Elena Dobre.", ["Dobre"])).toEqual(["Dobre"]);
+  });
+});
+
+describe("mentionsDate", () => {
+  const snapshot = "2026-09-11T11:28:18.188Z";
+
+  it.each([
+    "Seznam je aktuální k 2026-09-11.",
+    "Data mám k 11. 9. 2026.",
+    "Data mám k 11.9.2026.",
+    "Seznam je aktuální k jedenáctému září 2026.",
+    "Seznam je aktuální k jedenáctému září dva tisíce dvacet šest.",
+    "Údaje jsou z jedenáctého září.",
+    "Seznam je aktuální k 11. září 2026.",
+    "Data mám k 11.9.",
+  ])("accepts %j", (answer) => {
+    expect(mentionsDate(answer, snapshot)).toBe(true);
+  });
+
+  it.each([
+    "Seznam je aktuální k dvanáctému září.",
+    "Data mám k jedenáctému srpna.",
+    "Nevím, jak jsou data stará.",
+    "V Kluži jich mám jedenáct a ordinují i v září.",
+  ])("rejects %j", (answer) => {
+    expect(mentionsDate(answer, snapshot)).toBe(false);
   });
 });

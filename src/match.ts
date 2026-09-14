@@ -37,9 +37,6 @@ export const TRANSLITERATIONS: ReadonlyArray<readonly [string, string]> = [
   ["ia", "ja"],
   ["ie", "je"],
   ["iu", "ju"],
-  // Leftovers from Romanian orthography that Czech STT never produces
-  ["ş", "s"],
-  ["ţ", "t"],
 ];
 
 /** lowercase -> fold diacritics -> transliterate -> collapse doubles -> tidy. */
@@ -149,22 +146,22 @@ export const SPECIALITY_SYNONYMS: Readonly<Record<string, readonly string[]>> = 
 
 /** Czech exonyms -> the exact location string stored in the data. */
 export const CITY_SYNONYMS: Readonly<Record<string, readonly string[]>> = {
-  Bucharest: ["bukurest", "bukuresti", "bukurestu", "bucuresti"],
-  "Cluj-Napoca": ["kluz", "kluz napoca", "koloszvar", "kolozsvar"],
-  Timisoara: ["temesvar", "temeswar", "temesvaru"],
+  Bucharest: ["bukurest", "bukuresti", "bukurestu"],
+  "Cluj-Napoca": ["kluz", "kluz napoca"],
+  Timisoara: ["temesvar", "temesvaru"],
   Iasi: ["jasy", "jas", "jasi"],
   Constanta: ["konstanca", "konstanta", "konstance"],
-  Brasov: ["brasov", "kronstadt", "brasove"],
-  Sibiu: ["sibin", "hermannstadt", "sibini"],
-  Oradea: ["velky varadin", "varadin", "nagyvarad"],
-  "Targu Mures": ["targu mures", "marosvasarhely", "novy sekel"],
+  Brasov: ["brasove"],
+  Sibiu: ["sibin", "sibini"],
+  Oradea: ["velky varadin", "varadin"],
+  "Targu Mures": ["novy sekel"],
   Suceava: ["sucava", "sucave"],
   Galati: ["galac", "galace"],
   Craiova: ["krajova", "krajove"],
   Ploiesti: ["plojest", "plojesti"],
-  "Alba Iulia": ["alba julie", "gyulafehervar"],
-  "Baia Mare": ["baja mare", "nagybanya"],
-  "Satu Mare": ["satu mare", "szatmarnemeti"],
+  "Alba Iulia": ["alba julie"],
+  "Baia Mare": ["baja mare"],
+  "Satu Mare": [],
   "Sighetu Marmatiei": ["sighet", "siget"],
   "Ramnicu Valcea": ["ramniku valcea", "valcea"],
   "Drobeta-Turnu Severin": ["turnu severin", "severin"],

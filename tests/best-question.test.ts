@@ -72,6 +72,16 @@ describe("bestQuestion", () => {
     expect(question?.attribute).toBe("speciality"); // city/clinic/languages are identical
   });
 
+  it("does not ask which surname when the caller never said one", () => {
+    const candidates = [
+      candidate({ last_name: "Matei", location: "Targu Mures" }),
+      candidate({ last_name: "Rusu", location: "Targu Mures" }),
+      candidate({ last_name: "Popa", location: "Cluj-Napoca" }),
+    ];
+    expect(bestQuestion(candidates, true)?.attribute).toBe("last_name");
+    expect(bestQuestion(candidates, false)?.attribute).not.toBe("last_name");
+  });
+
   it("returns null for a single candidate", () => {
     expect(bestQuestion([candidate()])).toBeNull();
     expect(bestQuestion([])).toBeNull();

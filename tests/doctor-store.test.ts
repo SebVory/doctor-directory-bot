@@ -98,10 +98,6 @@ describe("confirm threshold depends on how much evidence there is", () => {
     expect(bare.needs_confirmation).toBe(true);
   });
 
-  it("Nyštor alone still confirms", () => {
-    expect(findDoctors({ surname: "Nyštor" }).needs_confirmation).toBe(true);
-  });
-
   it("a surname narrowed by speciality and city clears the lower bar", () => {
     // "čivu" reaches Chivu at 0.50: weak across 7029 rows, strong inside
     // "a paediatrician in Brasov".
@@ -112,17 +108,67 @@ describe("confirm threshold depends on how much evidence there is", () => {
     expect(narrowed.needs_confirmation).toBe(false);
   });
 
-  it("a language counts as narrowing too", () => {
-    // Nystor alone confirms at 0.50; with a language filter the same score is
-    // evidence enough to act on.
+  it("a language does not count as narrowing — seven values barely narrow", () => {
     expect(findDoctors({ surname: "Nyštor" }).needs_confirmation).toBe(true);
-    expect(findDoctors({ surname: "Nyštor", language: "maďarsky" }).needs_confirmation).toBe(false);
+    expect(findDoctors({ surname: "Nyštor", language: "maďarsky" }).needs_confirmation).toBe(true);
   });
 
   it("a given name counts as narrowing too", () => {
     const narrowed = findDoctors({ surname: "Moldanová", first_name: "Vlad" });
     expect(narrowed.matches[0]?.last_name).toBe("Moldovan");
     expect(narrowed.needs_confirmation).toBe(false);
+  });
+});
+
+describe("a given name must not substitute a neighbour", () => {
+  it("never hands over Diana as a confident answer when the caller said Ana", () => {
+    // 0.500. Kept as a candidate, but the bot has to ask before acting: "Dáryu"
+    // against "Daria" scores 0.483, so a floor that drops Diana drops Daria too.
+    const result = findDoctors({ surname: "Dumitrescu", first_name: "Ana", city: "Kluž" });
+    if (result.matches.some((m) => m.first_name !== "Ana")) {
+      expect(result.needs_confirmation).toBe(true);
+    }
+  });
+
+  it("still narrows on a declined given name", () => {
+    // "Alinu" against "Alina" scores 0.817 — a case ending, not a different person.
+    const result = findDoctors({ surname: "Dumitresku", first_name: "Alinu", city: "Kluž" });
+    expect(result.matches[0]?.first_name).toBe("Alina");
+  });
+
+  it("still reaches Daria from the transcript spelling", () => {
+    expect(findDoctors({ surname: "Dumitresku", first_name: "Dáryu" }).matches[0]?.first_name).toBe("Daria");
+  });
+
+  it("asks when the given name matched only loosely", () => {
+    const loose = findDoctors({ surname: "Dumitresku", first_name: "Alinu", city: "Kluž" });
+    expect(loose.matches[0]?.first_name).toBe("Alina");
+    expect(loose.needs_confirmation).toBe(true); // 0.817 is under FIRST_NAME_CONFIRM
+  });
+});
+
+describe("a real surname must not be swapped for another one", () => {
+  it("flags Stancu offered to someone who said Stan", () => {
+    const result = findDoctors({ surname: "Stan", city: "Vaslui", speciality: "onkolog" });
+    if (result.matches.length > 0 && result.matches[0]?.last_name !== "Stan") {
+      expect(result.surname_substituted).toBe(true);
+      expect(result.needs_confirmation).toBe(true);
+    }
+  });
+
+  it("flags Dumitru offered to someone who said Dumitrescu", () => {
+    const result = findDoctors({ surname: "Dumitrescu", city: "Mangalia", speciality: "praktický lékař" });
+    if (result.matches.length > 0 && result.matches[0]?.last_name !== "Dumitrescu") {
+      expect(result.surname_substituted).toBe(true);
+      expect(result.needs_confirmation).toBe(true);
+    }
+  });
+
+  it("leaves a mishearing alone — čivu is not a surname anyone has", () => {
+    const result = findDoctors({ surname: "čivu", speciality: "pediatr", city: "Brasov" });
+    expect(result.matches[0]?.last_name).toBe("Chivu");
+    expect(result.surname_substituted).toBe(false);
+    expect(result.needs_confirmation).toBe(false);
   });
 });
 
@@ -363,10 +409,10 @@ describe("irreducible pairs", () => {
       groups.set(key, [...(groups.get(key) ?? []), row]);
     }
     const pair = [...groups.values()].find((g) => g.length > 1);
-    if (pair === undefined) return; // the 500-row sample may not carry one
+    if (pair === undefined) throw new Error("sample carries no irreducible pair — make-sample must pin one");
 
     const [first] = pair;
-    if (first === undefined) return;
+    if (first === undefined) throw new Error("empty group");
     const result = findDoctors({
       surname: first.last_name,
       first_name: first.first_name,

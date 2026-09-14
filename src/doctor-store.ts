@@ -36,8 +36,19 @@ export const SUGGESTION_FLOOR = 0.4;
 export const DOMINANCE_TRIGGER = 0.95;
 export const DOMINANCE_FLOOR = 0.85;
 
-/** A given name this far off is a mismatch, not a weak signal — drop the row. */
-export const FIRST_NAME_FLOOR = 0.4;
+/** Below this a given name is noise rather than a mishearing. */
+export const FIRST_NAME_FLOOR = 0.45;
+
+/**
+ * Above the floor but below this, the name matched loosely and the bot reads it
+ * back instead of acting on it.
+ *
+ * The floor cannot do this work alone: "Dáryu" against "Daria" scores 0.483 and
+ * must be kept, while "Ana" against "Diana" scores 0.500 and must not be acted
+ * on. The wrong one scores higher, so no threshold separates them — what
+ * separates them is asking.
+ */
+export const FIRST_NAME_CONFIRM = 0.85;
 
 export type DoctorMatch = {
   id: string;
@@ -107,17 +118,20 @@ function rank(counts: Map<string, number>): { value: string; count: number }[] {
     .map(([value, count]) => ({ value, count }));
 }
 
-export function bestQuestion(candidates: readonly CandidateAttributes[]): BestQuestion | null {
+export function bestQuestion(
+  candidates: readonly CandidateAttributes[],
+  surnameWasGiven = true,
+): BestQuestion | null {
   if (candidates.length < 2) return null;
 
-  // Surname comes first and sits outside the bucket metric. "Dumitrescu, nebo
-  // Dumitru?" is always the right first question, and the smallest-largest-bucket
-  // rule would hand it to city (42 values) every time.
+  // Surname comes first and sits outside the bucket metric — but only when the
+  // caller actually said one. "Dumitrescu, or Dumitru?" resolves a mishearing;
+  // asked of someone who only named a town it is a question they cannot answer.
   const surnames = new Map<string, number>();
   for (const candidate of candidates) {
     surnames.set(candidate.last_name, (surnames.get(candidate.last_name) ?? 0) + 1);
   }
-  if (surnames.size > 1) {
+  if (surnameWasGiven && surnames.size > 1) {
     return { attribute: "last_name", options: rank(surnames).slice(0, 4), distinct_total: surnames.size };
   }
 
@@ -167,6 +181,8 @@ export type FindResult = {
   needs_confirmation: boolean;
   /** More than one plausible person and a question that separates them: do not name one. */
   must_ask: boolean;
+  /** The caller said a real surname and the best hit carries a different one. */
+  surname_substituted: boolean;
   /** The single most useful question to split the plausible candidates; null when there is one. */
   best_question: BestQuestion | null;
   /** What the spoken terms were understood as — null means "not recognised". */
@@ -208,9 +224,17 @@ type Row = {
   first_name_norm: string;
 };
 
-let cached: { db: Database.Database; locations: string[]; dataAsOf: string } | null = null;
+type Store = {
+  db: Database.Database;
+  locations: string[];
+  /** Every surname in the snapshot, normalized, so we can tell a real name from a mishearing. */
+  surnames: Set<string>;
+  dataAsOf: string;
+};
 
-function store(): { db: Database.Database; locations: string[]; dataAsOf: string } {
+let cached: Store | null = null;
+
+function store(): Store {
   const db = cached?.db ?? new Database(DB_PATH, { readonly: true, fileMustExist: true });
 
   // Cheap on every call, and the only thing standing between a long-running agent
@@ -223,13 +247,17 @@ function store(): { db: Database.Database; locations: string[]; dataAsOf: string
   if (cached === null || cached.dataAsOf !== loadedAt) {
     const locations = (db.prepare("SELECT DISTINCT location FROM doctors").all() as { location: string }[])
       .map((r) => r.location);
-    cached = { db, locations, dataAsOf: loadedAt };
+    const surnames = new Set(
+      (db.prepare("SELECT DISTINCT last_name_norm FROM doctors").all() as { last_name_norm: string }[])
+        .map((r) => r.last_name_norm),
+    );
+    cached = { db, locations, surnames, dataAsOf: loadedAt };
   }
   return cached;
 }
 
 export function findDoctors(query: FindQuery): FindResult {
-  const { db, locations, dataAsOf } = store();
+  const { db, locations, surnames: knownSurnames, dataAsOf } = store();
   const limit = query.limit ?? 3;
 
   const speciality = resolveSpeciality(query.speciality);
@@ -252,6 +280,7 @@ export function findDoctors(query: FindQuery): FindResult {
       needs_confirmation: false,
       best_question: null,
       must_ask: false,
+      surname_substituted: false,
       resolved,
       unresolved,
       data_as_of: dataAsOf,
@@ -302,10 +331,10 @@ export function findDoctors(query: FindQuery): FindResult {
     hasNearExact ? entry.score >= DOMINANCE_FLOOR : entry.score > 0,
   );
 
-  // A speciality, city, language or given name alongside the surname is
-  // independent evidence, so the bar for acting without confirmation comes down.
-  const narrowed =
-    speciality !== null || city !== null || language !== null || firstNorm !== null;
+  // A speciality, city or given name alongside the surname is independent
+  // evidence, so the bar for acting without confirmation comes down. Language is
+  // not: seven values over 7029 rows barely narrows anything.
+  const narrowed = speciality !== null || city !== null || firstNorm !== null;
   const confirmThreshold = narrowed ? CONFIRM_THRESHOLD_NARROWED : CONFIRM_THRESHOLD;
 
   // Once anything clears the confirm threshold, weaker rows are noise rather than
@@ -343,11 +372,23 @@ export function findDoctors(query: FindQuery): FindResult {
     first_name: row.first_name,
     languages: JSON.parse(row.languages_json) as string[],
   }));
-  const question = bestQuestion(plausible);
+  const question = bestQuestion(plausible, surnameNorm !== null);
 
   const top = matches[0];
-  const needs_confirmation =
+  const topEntry = shortlist[0];
+
+  // Three independent reasons to read the name back before acting on it.
+  const surnameUnsure =
     surnameNorm !== null && top !== undefined && top.score < confirmThreshold;
+  const firstNameUnsure =
+    firstNorm !== null && topEntry !== undefined && topEntry.firstScore < FIRST_NAME_CONFIRM;
+  const surname_substituted =
+    surnameNorm !== null &&
+    knownSurnames.has(surnameNorm) &&
+    topEntry !== undefined &&
+    topEntry.row.last_name_norm !== surnameNorm;
+
+  const needs_confirmation = surnameUnsure || firstNameUnsure || surname_substituted;
 
 
   return {
@@ -356,6 +397,7 @@ export function findDoctors(query: FindQuery): FindResult {
     needs_confirmation,
     best_question: question,
     must_ask: plausible.length > 1 && question !== null,
+    surname_substituted,
     resolved,
     unresolved,
     data_as_of: dataAsOf,

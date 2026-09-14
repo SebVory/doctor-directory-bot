@@ -1627,6 +1627,26 @@
   "rating": 4.5
  },
  {
+  "first_name": "Carmen",
+  "last_name": "Dumitrescu",
+  "clinic_name": "Clinica Giurgiu Care",
+  "location": "Giurgiu",
+  "speciality": "Radiology",
+  "address": "Strada Crinului 97",
+  "phone": "+40-246-714-419",
+  "email": "carmen.dumitrescu@clinica-giurgiu-care.ro",
+  "postal_code": "468727",
+  "county": "Giurgiu",
+  "years_experience": 7,
+  "education": "Ovidius University of Medicine",
+  "languages": [
+   "Spanish",
+   "Italian"
+  ],
+  "availability": "Tue-Sat 08:30-16:30",
+  "rating": 3.1
+ },
+ {
   "first_name": "Georgiana",
   "last_name": "Stan",
   "clinic_name": "Clinica Bistrita Care",
@@ -1790,6 +1810,27 @@
   "rating": 4.9
  },
  {
+  "first_name": "Ioana",
+  "last_name": "Dobre",
+  "clinic_name": "Clinica Sibiu Care",
+  "location": "Sibiu",
+  "speciality": "Pulmonology",
+  "address": "Strada Al. Ioan Cuza 70",
+  "phone": "+40-289-234-711",
+  "email": "ioana.dobre@clinica-sibiu-care.ro",
+  "postal_code": "495019",
+  "county": "Sibiu",
+  "years_experience": 10,
+  "education": "Iuliu Hatieganu University of Medicine and Pharmacy",
+  "languages": [
+   "Hungarian",
+   "Romanian",
+   "French"
+  ],
+  "availability": "Mon-Fri 09:00-17:00",
+  "rating": 4.8
+ },
+ {
   "first_name": "Stefan",
   "last_name": "Enache",
   "clinic_name": "Clinica Navodari Care",
@@ -1849,6 +1890,26 @@
   "rating": 3.6
  },
  {
+  "first_name": "Cosmin",
+  "last_name": "Enache",
+  "clinic_name": "Clinica Vaslui Care",
+  "location": "Vaslui",
+  "speciality": "Pediatrics",
+  "address": "Strada Crinului 109",
+  "phone": "+40-280-655-397",
+  "email": "cosmin.enache@clinica-vaslui-care.ro",
+  "postal_code": "414527",
+  "county": "Vaslui",
+  "years_experience": 11,
+  "education": "George Emil Palade University of Medicine",
+  "languages": [
+   "Italian",
+   "French"
+  ],
+  "availability": "Mon-Fri 09:00-17:00",
+  "rating": 4.4
+ },
+ {
   "first_name": "Sorin",
   "last_name": "Georgescu",
   "clinic_name": "Clinica Roman Care",
@@ -1891,6 +1952,26 @@
   "rating": 3.6
  },
  {
+  "first_name": "Alina",
+  "last_name": "Stanescu",
+  "clinic_name": "Clinica Bacau Care",
+  "location": "Bacau",
+  "speciality": "Gastroenterology",
+  "address": "Strada Primaverii 72",
+  "phone": "+40-236-806-821",
+  "email": "alina.stanescu@clinica-bacau-care.ro",
+  "postal_code": "612756",
+  "county": "Bacau",
+  "years_experience": 21,
+  "education": "Grigore T. Popa University of Medicine and Pharmacy",
+  "languages": [
+   "English",
+   "French"
+  ],
+  "availability": "Mon-Fri 10:00-18:00",
+  "rating": 4.5
+ },
+ {
   "first_name": "Radu",
   "last_name": "Rusu",
   "clinic_name": "Clinica Craiova Care",
@@ -1928,6 +2009,25 @@
    "English"
   ],
   "availability": "Tue-Sat 08:30-16:30",
+  "rating": 4
+ },
+ {
+  "first_name": "Alina",
+  "last_name": "Dragomir",
+  "clinic_name": "Clinica Deva Care",
+  "location": "Deva",
+  "speciality": "Gastroenterology",
+  "address": "Strada Lalelelor 113",
+  "phone": "+40-262-407-381",
+  "email": "alina.dragomir@clinica-deva-care.ro",
+  "postal_code": "163918",
+  "county": "Hunedoara",
+  "years_experience": 36,
+  "education": "Ovidius University of Medicine",
+  "languages": [
+   "Italian"
+  ],
+  "availability": "Mon-Fri 09:00-17:00",
   "rating": 4
  },
  {

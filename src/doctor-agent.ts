@@ -27,7 +27,8 @@ Jak pracuješ:
 - Při dvou a více kandidátech nikdy žádného z nich nenabízej jako odpověď a nikdy se neptej "to bude on?" nebo "to bude ona?". Vždy polož otázku z best_question. Jméno konkrétního lékaře řekni teprve tehdy, když zbyde jediný kandidát.
 - Když má odpověď z find_doctors needs_confirmation true, nejdřív si jméno ověř zpátky, než začneš číst jakékoli údaje: "Slyšel jsem správně, že hledáte doktora Munteanu?"
 - Když nenajdeš nic, řekni to a zeptej se na specializaci nebo město.
-- Telefon, adresu a e-mail říkej jen tehdy, když si o ně volající řekne. V první odpovědi nikdy. Tehdy zavolej get_doctor_contact.
+- Telefon, adresu, e-mail a ordinační hodiny říkej jen tehdy, když si o ně volající řekne — tehdy zavolej get_doctor_contact. Sám je nenabízej. Když se ale zeptal hned v první větě a vyšel ti právě jeden lékař, dej mu je rovnou v téhle odpovědi.
+- Na "do kolika má" nebo "kdy ordinuje" u jednoho určeného lékaře zavolej get_doctor_contact a přečti availability.
 - Když má kontakt email_shared true, řekni, že ta e-mailová adresa patří klinice a sdílí ji víc lékařů stejného jména, a že přímý je telefon.
 - Když se best_question ptá na languages, znamená to, že se ti dva záznamy liší jen jazyky a telefonem. Řekni to rovnou ("Mám tam dva se stejným jménem i oborem, liší se jen jazyky") a teprve pak se zeptej.
 - Když se volající ptá, jak jsou údaje čerstvé, řekni datum z pole data_as_of.
@@ -55,7 +56,7 @@ const tools: Anthropic.Tool[] = [
   },
   {
     name: "get_doctor_contact",
-    description: "Telefon, adresa a e-mail jednoho lékaře. Volej až když si o kontakt volající řekne.",
+    description: "Telefon, adresa, e-mail a ordinační hodiny jednoho lékaře. Volej, až když si o některý z těchto údajů volající řekne.",
     input_schema: {
       type: "object",
       properties: { id: { type: "string", description: "id z find_doctors" } },
@@ -80,6 +81,8 @@ export type ToolCall = { name: string; input: Record<string, unknown> };
 export type TurnResult = {
   /** Only the text of the final call — what the caller is meant to hear as the answer. */
   answer: string;
+  /** Milliseconds to the first spoken token on the streamed call, null if none streamed. */
+  ttft_ms: number | null;
   /**
    * Filler the model emits alongside a tool call ("Moment, podívám se"). A voice
    * runtime plays this while the search runs, which is where the perceived latency
@@ -94,7 +97,26 @@ function nullableString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
 }
 
+/** A missing snapshot is the one failure a reader will hit on a fresh clone. */
+function toolErrorMessage(error: unknown): string {
+  const text = String(error);
+  if (text.includes("unable to open database") || text.includes("fileMustExist") || text.includes("ENOENT")) {
+    return "no doctor snapshot yet — run npm run ingest first";
+  }
+  return text;
+}
+
 function executeTool(name: string, input: Record<string, unknown>): string {
+  try {
+    return runTool(name, input);
+  } catch (error) {
+    const message = toolErrorMessage(error);
+    console.error(`[doctor-agent] tool ${name} failed: ${message}`);
+    return JSON.stringify({ error: message });
+  }
+}
+
+function runTool(name: string, input: Record<string, unknown>): string {
   switch (name) {
     case "find_doctors": {
       const result = findDoctors({
@@ -163,6 +185,7 @@ export async function runTurn(
   const client = options.client ?? makeClient();
   const messages: Anthropic.MessageParam[] = [...history, { role: "user", content: utterance }];
   const toolCalls: ToolCall[] = [];
+  let firstTokenMs: number | null = null;
   const preambleParts: string[] = [];
   let finalText = "";
   let exhaustedTurns = true;
@@ -180,9 +203,9 @@ export async function runTurn(
       messages,
     };
 
-    // Stream once tool results are in hand: that call produces the words the caller
-    // hears, so its time-to-first-token is the number that matters for voice. The
-    // tool-decision call is never spoken, so it stays non-streaming.
+    // Stream every call after the first tool result: any of them may turn out to
+    // be the spoken answer, and time-to-first-token is the number that matters
+    // for voice. The opening tool-decision call is never spoken, so it does not.
     let ttftMs: number | null = null;
     let response: Anthropic.Message;
 
@@ -190,6 +213,7 @@ export async function runTurn(
       const stream = client.messages.stream(params);
       stream.on("text", () => {
         ttftMs ??= Math.round(performance.now() - callStarted);
+        firstTokenMs ??= ttftMs;
       });
       response = await stream.finalMessage();
     } else {
@@ -272,7 +296,7 @@ export async function runTurn(
   // Only the substituted line needs adding; real turns are already in history.
   if (substituted) messages.push({ role: "assistant", content: answer });
 
-  return { answer, preamble: preambleParts.join(" "), toolCalls, messages };
+  return { answer, preamble: preambleParts.join(" "), ttft_ms: firstTokenMs, toolCalls, messages };
 }
 
 async function interactive(): Promise<void> {

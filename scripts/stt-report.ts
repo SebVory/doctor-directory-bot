@@ -90,19 +90,31 @@ console.log(`\nopenings: ${pass} pass, ${fail} fail, ${unknown} free-text expect
 console.log(`══════ CONVERSATIONS (${sections.size}) ══════`);
 // Each section's first transcript is replayed as a follow-up to an opening that
 // provokes the question that section answers.
+const DUMITRESCU = "Dobrý den, já vás zdravím, chtěl bych se zeptat, jestli máte číslo na doktora Dumistrésku.";
+const VASELYSKU = "Dobrý den, potřeboval bych kontakt na paní Váselysku.";
+const FOUND_ONE = "Hledám doktora Vasilevsku, neurologa v Targoviste.";
+
+// Keyed on the exact section heading. Substring matching silently paired every
+// section with the first key that happened to appear in its title, so the
+// "after one doctor was found" and "confirmation" sections were replayed after
+// a setup turn that had found nobody — any follow-up numbers from earlier runs
+// of this script describe the wrong conversation.
 const SETUP: Record<string, string> = {
-  mesto: "Dobrý den, já vás zdravím, chtěl bych se zeptat, jestli máte číslo na doktora Dumistrésku.",
-  jmen: "Dobrý den, já vás zdravím, chtěl bych se zeptat, jestli máte číslo na doktora Dumistrésku.",
-  oboru: "Dobrý den, já vás zdravím, chtěl bych se zeptat, jestli máte číslo na doktora Dumistrésku.",
-  Potvrzeni: "Dobrý den, potřeboval bych kontakt na paní Váselysku.",
-  nalezeni: "Dobrý den, já vás zdravím, chtěl bych se zeptat, jestli máte číslo na doktora Dumistrésku.",
-  Zmena: "Dobrý den, já vás zdravím, chtěl bych se zeptat, jestli máte číslo na doktora Dumistrésku.",
+  'Odpoved na otazku po meste (predchozi tah: bot se ptal "V jakem meste?")': DUMITRESCU,
+  "Vyber ze 2 az 4 jmen (predchozi tah: bot vyjmenoval krestni jmena)": DUMITRESCU,
+  "Odpoved na otazku po oboru": DUMITRESCU,
+  'Potvrzeni jmena (predchozi tah: "Slysel jsem spravne, ze hledate doktora X?")': VASELYSKU,
+  'Po nalezeni jednoho doktora (predchozi tah: bot rekl "Mam ji: doktorka X")': FOUND_ONE,
+  "Zmena v pulce hovoru": DUMITRESCU,
 };
 for (const [name, entries] of sections) {
-  const key = Object.keys(SETUP).find((k) => name.toLowerCase().includes(k.toLowerCase())) ?? "mesto";
+  const setup = SETUP[name];
+  if (setup === undefined) {
+    console.log(`\n── ${name}\n   (no setup turn defined for this section — skipped)`);
+    continue;
+  }
   console.log(`\n── ${name}`);
   let history: Awaited<ReturnType<typeof runTurn>>["messages"] = [];
-  const setup = SETUP[key] ?? "";
   const first = await report("t1", setup, "(setup turn)", history);
   history = first.messages;
   for (const e of entries.slice(0, 2)) {

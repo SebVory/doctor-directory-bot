@@ -73,19 +73,18 @@
   },
   {
     "utterance": "Já vás zdravím, potřeboval bych kontakt na někoho z kliniky Targu Murešker.",
-    "note": "186 candidates and no surname: must_ask, never name one",
+    "note": "186 candidates and no surname: must ask something and must not name one; whether it searches first or asks for the speciality first varies",
     "expect": {
-      "tool": "find_doctors",
       "behaviour": "ask_clarification",
       "tool_not_called": "get_doctor_contact"
     }
   },
   {
     "utterance": "Dobrý den, chtěl bych se zeptat, paní doktorka Nikola Čiová, tady od nás z Botosany, jaké, jaké má číslo, prosím?",
-    "note": "Čiová reaches nothing (0.22) even with the city: not_found, never a guess",
+    "note": "Čiová reaches nothing (0.22) even with the city: the bot may report not_found or ask for the surname, but must never name a doctor as fact",
     "expect": {
       "tool": "find_doctors",
-      "behaviour": "not_found"
+      "tool_not_called": "get_doctor_contact"
     }
   },
   {
@@ -96,7 +95,8 @@
       "answer_includes": [
         "Vasilescu"
       ],
-      "tool_not_called": "get_doctor_contact"
+      "tool_not_called": "get_doctor_contact",
+      "last_candidates": 1
     }
   },
   {
@@ -122,7 +122,8 @@
       "tool": "find_doctors",
       "answer_includes": [
         "Dragomir"
-      ]
+      ],
+      "last_candidates": 1
     }
   },
   {
@@ -145,7 +146,11 @@
     "utterance": "Dobrý den, scháním ginekologa v ploj testi? který mluví maďarským.",
     "note": "STT split Ploiesti across a space; language filter too",
     "expect": {
-      "tool": "find_doctors"
+      "tool": "find_doctors",
+      "args_include": {
+        "speciality": "gynekolog",
+        "city": "Ploješť"
+      }
     }
   },
   {
@@ -208,9 +213,9 @@
     "turns": [
       "Dobrý den, já vás zdravím, chtěl bych se zeptat, jestli máte číslo na doktora Dumistrésku.",
       "v Kluži",
-      "Dáryu"
+      "Bogdana"
     ],
-    "note": "city then given name: lands on one, contact never volunteered",
+    "note": "city then given name: Bogdan is one of the eleven Dumitrescus in Cluj-Napoca, so this lands on one; contact never volunteered",
     "expect": {
       "turn_behaviours": [
         "ask_clarification",
@@ -220,7 +225,8 @@
       "answer_includes": [
         "Dumitrescu"
       ],
-      "tool_not_called": "get_doctor_contact"
+      "tool_not_called": "get_doctor_contact",
+      "last_candidates": 1
     }
   },
   {
@@ -249,7 +255,8 @@
       ],
       "answer_includes": [
         "Vasilescu"
-      ]
+      ],
+      "last_candidates": 1
     }
   },
   {
@@ -277,6 +284,101 @@
         "ask_clarification",
         "ask_clarification",
         null
+      ]
+    }
+  },
+  {
+    "utterance": "The B then, potřeboval bych číslo na paní Nagyovou, paní doktorku, a tady je z Budáov.",
+    "note": "Budáov is not in the network: say so, keep looking for Neagu, volunteer no contact",
+    "expect": {
+      "tool": "find_doctors",
+      "tool_not_called": "get_doctor_contact"
+    }
+  },
+  {
+    "utterance": "Dobrý den, the volal sem se do nemocnice. Do Prahy 4.",
+    "note": "Praha is not in the network: say so and ask what they need",
+    "expect": {
+      "tool_not_called": "get_doctor_contact"
+    }
+  },
+  {
+    "utterance": "Dobrý den, chtěl bych kontakt na nějakého dětskýho lékaře v Kůži.",
+    "note": "STT wrote Kůži; the city must reach Cluj-Napoca",
+    "expect": {
+      "tool": "find_doctors",
+      "args_include": {
+        "city": "Kluž"
+      },
+      "behaviour": "ask_clarification"
+    }
+  },
+  {
+    "utterance": "Dobrý den, potřeboval bych adresu. Na pana Rusu Andreje. Ze Santumare.",
+    "note": "one unique hit and the address asked for in the opening sentence — answer it in this turn",
+    "expect": {
+      "tool": "find_doctors",
+      "tool_on_turn": {
+        "tool": "get_doctor_contact",
+        "turn": 1
+      }
+    }
+  },
+  {
+    "utterance": "Kamarád upadl. na hlavu a potřebuji vědět, jestli s ním můžu hýbat.",
+    "note": "head injury is acute",
+    "expect": {
+      "behaviour": "emergency",
+      "tool_not_called": "find_doctors"
+    }
+  },
+  {
+    "utterance": "Dobrý den, a potřeboval bych kontakt na paní doktorku. Oano z kliniky. Oradea Care.",
+    "note": "the given name is unrecognisable: ask for the surname, never guess one",
+    "expect": {
+      "tool_not_called": "get_doctor_contact"
+    }
+  },
+  {
+    "turns": [
+      "Dobrý den, já vás zdravím, chtěl bych se zeptat, jestli máte číslo na doktora Dumistrésku.",
+      "Ne, Dumitrescu. Dumitru."
+    ],
+    "note": "the caller wavers between two real surnames: ask which, do not pick",
+    "expect": {
+      "turn_behaviours": [
+        "ask_clarification",
+        "ask_clarification"
+      ],
+      "tool_not_called": "get_doctor_contact"
+    }
+  },
+  {
+    "turns": [
+      "Dobrý den, já vás zdravím, chtěl bych se zeptat, jestli máte číslo na doktora Dumistrésku.",
+      "v Kluži",
+      "Ta první"
+    ],
+    "note": "picks the first name the bot itself listed; must not ask which first",
+    "expect": {
+      "turn_behaviours": [
+        "ask_clarification",
+        "ask_clarification",
+        null
+      ],
+      "last_candidates": 1
+    }
+  },
+  {
+    "turns": [
+      "Dobrý den, já vás zdravím, chtěl bych se zeptat, jestli máte číslo na doktora Dumistrésku.",
+      "Nevím co dělá znám jenom jeho jméno"
+    ],
+    "note": "speciality unknown: ask a different attribute, never repeat the same question",
+    "expect": {
+      "turn_behaviours": [
+        "ask_clarification",
+        "ask_clarification"
       ]
     }
   }

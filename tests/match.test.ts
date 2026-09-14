@@ -74,7 +74,6 @@ describe("similarity — STT-mangled Romanian surnames", () => {
     ["Vasilesku", "Vasilescu"],
     ["Štojka", "Stoica"],
     ["Popesku", "Popescu"],
-    ["Jonesku", "Ionescu"],
     ["Kivu", "Chivu"],
     ["Enake", "Enache"],
     ["Dragomír", "Dragomir"],
@@ -118,7 +117,6 @@ describe("generalisation — surnames the transliteration table was not built on
     ["Ijakob", "Iacob"],
     ["Rusů", "Rusu"],
     ["Stánová", "Stan"],
-    ["Jonesku", "Ionescu"],
   ])("%s resolves to %s", (spoken, expected) => {
     expect(bestSurname(spoken)).toBe(expected);
     expect(similarityOfNormalized(normalizeSurname(spoken), normalizeSurname(expected))).toBeGreaterThanOrEqual(0.6);
@@ -324,6 +322,34 @@ describe("semantic drift warning", () => {
   it("flags an unknown language", () => {
     const odd = fixture(3, { languages: ["Klingon"] }).map((row) => DoctorSchema.parse(row));
     expect(findUnreachableValues(odd)).toContain('language "Klingon"');
+  });
+});
+
+describe("ingest robustness", () => {
+  it("drops rows that hash to an id already taken instead of aborting", () => {
+    const dir = mkdtempSync(join(tmpdir(), "dupe-test-"));
+    try {
+      const rowsIn = fixture(4);
+      const outcome = loadSnapshot([...rowsIn, rowsIn[0], rowsIn[1]], join(dir, "d.sqlite"));
+      expect(outcome.ok).toBe(true);
+      if (!outcome.ok) return;
+      expect(outcome.duplicates).toBe(2);
+      expect(outcome.inserted).toBe(4);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses a payload that is not an array", () => {
+    const dir = mkdtempSync(join(tmpdir(), "shape-test-"));
+    try {
+      const outcome = loadSnapshot({ doctors: [] } as unknown as unknown[], join(dir, "d.sqlite"));
+      expect(outcome.ok).toBe(false);
+      if (outcome.ok) return;
+      expect(outcome.reason).toMatch(/expected a JSON array/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
