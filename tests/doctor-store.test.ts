@@ -9,9 +9,8 @@ const dir = mkdtempSync(join(tmpdir(), "store-test-"));
 process.env["DOCTORS_DB"] = join(dir, "doctors.sqlite");
 
 const { DoctorSchema, loadSnapshot } = await import("../src/ingest.js");
-const { CONFIRM_THRESHOLD, DOMINANCE_TRIGGER, findDoctors, getDoctorContact } = await import(
-  "../src/doctor-store.js"
-);
+const { CONFIRM_THRESHOLD, CONFIRM_THRESHOLD_NARROWED, DOMINANCE_TRIGGER, SUGGESTION_FLOOR, findDoctors, getDoctorContact } =
+  await import("../src/doctor-store.js");
 const { normalize, similarityOfNormalized } = await import("../src/match.js");
 
 const rows = (JSON.parse(readFileSync("./data/data-sample.json", "utf8")) as unknown[]).map((r) =>
@@ -67,6 +66,79 @@ describe("first name scoring", () => {
       (m) => similarityOfNormalized(normalize("Alinu"), normalize(m.first_name)) < 0.4,
     );
     expect(floorBreached).toBe(false);
+  });
+});
+
+describe("never confirm a name the search did not find", () => {
+  it("returns nothing rather than offering an unrelated surname", () => {
+    // A caller who says Popescu was being offered Dumitrescu at 0.31 because no
+    // Popescu practised family medicine in that town. That is a different person.
+    const result = findDoctors({ surname: "Svoboda" });
+    expect(result.matches).toHaveLength(0);
+    expect(result.needs_confirmation).toBe(false);
+  });
+
+  it.each(["Hordyska", "Svoboda"])("drops %s, which is nobody in the data", (surname) => {
+    expect(findDoctors({ surname }).matches).toHaveLength(0);
+  });
+
+  it("still offers a near miss that is plausibly the same person", () => {
+    const result = findDoctors({ surname: "Nyštor" });
+    expect(result.matches[0]?.last_name).toBe("Nistor");
+    expect(result.matches[0]?.score).toBeGreaterThanOrEqual(SUGGESTION_FLOOR);
+    expect(result.needs_confirmation).toBe(true);
+  });
+});
+
+describe("confirm threshold depends on how much evidence there is", () => {
+  it("a surname alone still has to clear 0.6", () => {
+    const bare = findDoctors({ surname: "Váselysku" });
+    expect(bare.matches[0]?.last_name).toBe("Vasilescu");
+    expect(bare.matches[0]?.score).toBeLessThan(CONFIRM_THRESHOLD);
+    expect(bare.needs_confirmation).toBe(true);
+  });
+
+  it("Nyštor alone still confirms", () => {
+    expect(findDoctors({ surname: "Nyštor" }).needs_confirmation).toBe(true);
+  });
+
+  it("a surname narrowed by speciality and city clears the lower bar", () => {
+    // "čivu" reaches Chivu at 0.50: weak across 7029 rows, strong inside
+    // "a paediatrician in Brasov".
+    const narrowed = findDoctors({ surname: "čivu", speciality: "pediatr", city: "Brasov" });
+    expect(narrowed.matches[0]?.last_name).toBe("Chivu");
+    expect(narrowed.matches[0]?.score).toBeGreaterThanOrEqual(CONFIRM_THRESHOLD_NARROWED);
+    expect(narrowed.matches[0]?.score).toBeLessThan(CONFIRM_THRESHOLD);
+    expect(narrowed.needs_confirmation).toBe(false);
+  });
+
+  it("a given name counts as narrowing too", () => {
+    const narrowed = findDoctors({ surname: "Moldanová", first_name: "Vlad" });
+    expect(narrowed.matches[0]?.last_name).toBe("Moldovan");
+    expect(narrowed.needs_confirmation).toBe(false);
+  });
+});
+
+describe("must_ask", () => {
+  it("is set when several people remain and a question separates them", () => {
+    const many = findDoctors({ surname: "Dumitresku" });
+    expect(many.candidates).toBeGreaterThan(1);
+    expect(many.must_ask).toBe(true);
+  });
+
+  it("is clear once one candidate remains", () => {
+    const rowOne = rows[0];
+    expect(rowOne).toBeDefined();
+    if (rowOne === undefined) return;
+    const one = findDoctors({
+      surname: rowOne.last_name, first_name: rowOne.first_name,
+      city: rowOne.location, speciality: rowOne.speciality,
+    });
+    if (one.candidates === 1) expect(one.must_ask).toBe(false);
+  });
+
+  it("is clear when nothing was found", () => {
+    expect(findDoctors({ surname: "Svoboda" }).must_ask).toBe(false);
   });
 });
 

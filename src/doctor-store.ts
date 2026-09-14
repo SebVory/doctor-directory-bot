@@ -13,6 +13,21 @@ import { normalize, normalizeSurname, resolveCity, resolveLanguage, resolveSpeci
 export const CONFIRM_THRESHOLD = 0.6;
 
 /**
+ * With a surname alone, 0.6 is the right bar. Once the caller has also given a
+ * speciality, a city or a given name, the same score means more: 0.5 inside
+ * "a paediatrician in Brasov" is stronger evidence than 0.5 across 7029 rows,
+ * because the prefilter already did most of the work.
+ */
+export const CONFIRM_THRESHOLD_NARROWED = 0.45;
+
+/**
+ * Below this, a candidate is not a worse guess — it is a different person. The
+ * bot must never read a name back that the search did not really find: a caller
+ * who said Popescu was being offered Dumitrescu at 0.31.
+ */
+export const SUGGESTION_FLOOR = 0.4;
+
+/**
  * A wide net is right while the matcher is unsure — "Nyštor" should still reach
  * "Nistor" at 0.5. It is wrong once something matches almost exactly: with 277
  * spot-on Dumitrescus in hand, 288 Dumitrus at 0.765 are noise, and they corrupt
@@ -148,8 +163,10 @@ export type FindResult = {
   matches: DoctorMatch[];
   /** How many people the caller might plausibly mean, after scoring and dominance. */
   candidates: number;
-  /** True when a surname was given but the best hit is under CONFIRM_THRESHOLD. */
+  /** True when a surname was given but the best hit is under the confirm threshold. */
   needs_confirmation: boolean;
+  /** More than one plausible person and a question that separates them: do not name one. */
+  must_ask: boolean;
   /** The single most useful question to split the plausible candidates; null when there is one. */
   best_question: BestQuestion | null;
   /** What the spoken terms were understood as — null means "not recognised". */
@@ -234,6 +251,7 @@ export function findDoctors(query: FindQuery): FindResult {
       candidates: 0,
       needs_confirmation: false,
       best_question: null,
+      must_ask: false,
       resolved,
       unresolved,
       data_as_of: dataAsOf,
@@ -284,12 +302,20 @@ export function findDoctors(query: FindQuery): FindResult {
     hasNearExact ? entry.score >= DOMINANCE_FLOOR : entry.score > 0,
   );
 
+  // A speciality, city or given name alongside the surname is independent
+  // evidence, so the bar for acting without confirmation comes down.
+  const narrowed = speciality !== null || city !== null || firstNorm !== null;
+  const confirmThreshold = narrowed ? CONFIRM_THRESHOLD_NARROWED : CONFIRM_THRESHOLD;
+
   // Once anything clears the confirm threshold, weaker rows are noise rather than
   // alternatives and must not reach the model — it is told how many candidates
-  // there are and will name one. Below the threshold the best guess is all we
-  // have, and the bot reads the name back instead of acting on it.
-  const confident = plausibleScored.filter((entry) => entry.score >= CONFIRM_THRESHOLD);
-  const shortlist = confident.length > 0 ? confident : plausibleScored;
+  // there are and will name one. Below the threshold the best guess is offered
+  // for confirmation, but only if it is close enough to be the same person.
+  const confident = plausibleScored.filter((entry) => entry.score >= confirmThreshold);
+  const shortlist =
+    confident.length > 0
+      ? confident
+      : plausibleScored.filter((entry) => entry.score >= SUGGESTION_FLOOR);
 
   const matches = shortlist
     .slice(0, limit)
@@ -307,25 +333,28 @@ export function findDoctors(query: FindQuery): FindResult {
       score: Number(score.toFixed(3)),
     }));
 
-  const top = matches[0];
-  const needs_confirmation =
-    surnameNorm !== null && top !== undefined && top.score < CONFIRM_THRESHOLD;
-
-  // Computed over every plausible candidate, not just the handful we read out —
+  // Computed over every confident candidate, not just the handful read out —
   // 277 Dumitrescus need "which city", even though only three are returned.
   const plausible = confident.map(({ row }) => ({
-      last_name: row.last_name,
-      location: row.location,
-      speciality: row.speciality,
-      first_name: row.first_name,
-      languages: JSON.parse(row.languages_json) as string[],
-    }));
+    last_name: row.last_name,
+    location: row.location,
+    speciality: row.speciality,
+    first_name: row.first_name,
+    languages: JSON.parse(row.languages_json) as string[],
+  }));
+  const question = bestQuestion(plausible);
+
+  const top = matches[0];
+  const needs_confirmation =
+    surnameNorm !== null && top !== undefined && top.score < confirmThreshold;
+
 
   return {
     matches,
     candidates: plausible.length,
     needs_confirmation,
-    best_question: bestQuestion(plausible),
+    best_question: question,
+    must_ask: plausible.length > 1 && question !== null,
     resolved,
     unresolved,
     data_as_of: dataAsOf,

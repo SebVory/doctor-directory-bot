@@ -1,0 +1,918 @@
+{
+ "openings": [
+  {
+   "utterance": "Dobrý den, já vás zdravím, chtěl bych se zeptat, jestli máte číslo na doktora Dumistrésku.",
+   "fields": {
+    "surname": "Dumistrésku",
+    "first_name": null,
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": "Dumitrescu",
+    "city": null,
+    "speciality": null
+   },
+   "note": ""
+  },
+  {
+   "utterance": "Dobrý den, kolika dnes má pan doktor Vlad dobre?",
+   "fields": {
+    "surname": "dobre",
+    "first_name": "Vlad",
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": "Dobre",
+    "city": null,
+    "speciality": null
+   },
+   "note": ""
+  },
+  {
+   "utterance": "Dobrý den, já bych se chtěl zeptat, do kolika má restaurace Elena Dobryová?",
+   "fields": {
+    "surname": "Dobryová",
+    "first_name": "Elena",
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": "Dobre",
+    "city": null,
+    "speciality": null
+   },
+   "note": "STT 'restaurace' misheard for 'doktorka'"
+  },
+  {
+   "utterance": "Dobrý den, mohli byste mi nadiktovat e-mail na paní doktorku Klaudii Matějovou?",
+   "fields": {
+    "surname": "Matějovou",
+    "first_name": "Klaudii",
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": "Matei",
+    "city": null,
+    "speciality": null
+   },
+   "note": ""
+  },
+  {
+   "utterance": "Dobrý den, potřeboval bych kontakt na paní Váselysku.",
+   "fields": {
+    "surname": "Váselysku",
+    "first_name": null,
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": "Vasilescu",
+    "city": null,
+    "speciality": null
+   },
+   "note": "STT i/y"
+  },
+  {
+   "utterance": "Dobrý den, dokolika má doktorka, ee, Georgievska? Co dělá v pediatrii?",
+   "fields": {
+    "surname": "Georgievska",
+    "first_name": null,
+    "speciality": "pediatrie",
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": "Georgescu",
+    "city": null,
+    "speciality": "Pediatrics"
+   },
+   "note": ""
+  },
+  {
+   "utterance": "The B then, potřeboval bych číslo na paní Nagyovou, paní doktorku, a tady je z Budáov.",
+   "fields": {
+    "surname": "Nagyovou",
+    "first_name": null,
+    "speciality": null,
+    "city": "Budáov",
+    "language": null
+   },
+   "target": {
+    "surname": "Neagu",
+    "city": null,
+    "speciality": null
+   },
+   "note": "city not in network"
+  },
+  {
+   "utterance": "Dobrý den, ... paní doktorka na pulmonologii, paní doktorku z Tanců by chtěla?",
+   "fields": {
+    "surname": "Tanců",
+    "first_name": null,
+    "speciality": "pulmonologie",
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": "Stancu",
+    "city": null,
+    "speciality": "Pulmonology"
+   },
+   "note": "STT lost the S"
+  },
+  {
+   "utterance": "Dobrý den, the volal sem se do nemocnice. Do Prahy 4.",
+   "fields": {
+    "surname": null,
+    "first_name": null,
+    "speciality": null,
+    "city": "Praha",
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": null,
+    "speciality": null
+   },
+   "note": "nobody; Praha not in network"
+  },
+  {
+   "utterance": "Hello, hello, Slishy Messer.",
+   "fields": {
+    "surname": null,
+    "first_name": null,
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": null,
+    "speciality": null
+   },
+   "note": "line check, no lookup"
+  },
+  {
+   "utterance": "Dobrý den, je tam pan doktor Bob Hordyska, potřeboval bych s ním mluvit.",
+   "fields": {
+    "surname": "Hordyska",
+    "first_name": "Bob",
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": null,
+    "speciality": null
+   },
+   "note": "surname not in data at all"
+  },
+  {
+   "utterance": "Dobrý den, nemůžu se dovolat paní doktorce Rusové ...",
+   "fields": {
+    "surname": "Rusové",
+    "first_name": null,
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": "Rusu",
+    "city": null,
+    "speciality": null
+   },
+   "note": "-ové strip"
+  },
+  {
+   "utterance": "Já vás zdravím, ee, ... Kontakt, na pana doktora. Diakonu.",
+   "fields": {
+    "surname": "Diakonu",
+    "first_name": null,
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": "Diaconu",
+    "city": null,
+    "speciality": null
+   },
+   "note": "name split by full stops"
+  },
+  {
+   "utterance": "Dobrý den, ... dokolika dnes ordinuje pan doktor Staneska, tady u nás, v Satu Mare?",
+   "fields": {
+    "surname": "Staneska",
+    "first_name": null,
+    "speciality": null,
+    "city": "Satu Mare",
+    "language": null
+   },
+   "target": {
+    "surname": "Stanescu",
+    "city": "Satu Mare",
+    "speciality": null
+   },
+   "note": ""
+  },
+  {
+   "utterance": "Dobrý den, ... nadiktovat e-mail na paní doktorku Dary Matejovou z kliniky Botan Siker?",
+   "fields": {
+    "surname": "Matejovou",
+    "first_name": "Dary",
+    "speciality": null,
+    "city": "Botan Siker",
+    "language": null
+   },
+   "target": {
+    "surname": "Matei",
+    "city": "Botosani",
+    "speciality": null
+   },
+   "note": "clinic mangled"
+  },
+  {
+   "utterance": "Dobrý den, můžu dostat kontakt na paní doktorku Lauru? Dumitrovou?",
+   "fields": {
+    "surname": "Dumitrovou",
+    "first_name": "Lauru",
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": "Dumitru",
+    "city": null,
+    "speciality": null
+   },
+   "note": ""
+  },
+  {
+   "utterance": "Já vás zdravím, potřeboval bych kontakt na někoho z kliniky Targu Murešker.",
+   "fields": {
+    "surname": null,
+    "first_name": null,
+    "speciality": null,
+    "city": "Targu Mureš",
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": "Targu Mures",
+    "speciality": null
+   },
+   "note": "no surname"
+  },
+  {
+   "utterance": "Dobrý den, dovolal jsem se do kliniky Lugoj Care.",
+   "fields": {
+    "surname": null,
+    "first_name": null,
+    "speciality": null,
+    "city": "Lugoj",
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": null,
+    "speciality": null
+   },
+   "note": "just asking where they called"
+  },
+  {
+   "utterance": "Dobrý den, a potřeboval bych kontakt na paní doktorku. Oano z kliniky. Oradea Care.",
+   "fields": {
+    "surname": null,
+    "first_name": "Oano",
+    "speciality": null,
+    "city": "Oradea",
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": "Oradea",
+    "speciality": null
+   },
+   "note": "given name unrecognisable"
+  },
+  {
+   "utterance": "Dobrý den, ... paní doktorka, Maria Ionesca? A pokud na ní máte e-mail ...",
+   "fields": {
+    "surname": "Ionesca",
+    "first_name": "Maria",
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": "Ionescu",
+    "city": null,
+    "speciality": null
+   },
+   "note": ""
+  },
+  {
+   "utterance": "Dobrý den, ... paní doktorka Nikola Čiová, tady od nás z Botosany, jaké má číslo?",
+   "fields": {
+    "surname": "Čiová",
+    "first_name": "Nikola",
+    "speciality": null,
+    "city": "Botosany",
+    "language": null
+   },
+   "target": {
+    "surname": "Chivu",
+    "city": "Botosani",
+    "speciality": null
+   },
+   "note": ""
+  },
+  {
+   "utterance": "Dobrý den, slyšíme se? ... na číslo, pana doktora. Stefana Matěje.",
+   "fields": {
+    "surname": "Matěje",
+    "first_name": "Stefana",
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": "Matei",
+    "city": null,
+    "speciality": null
+   },
+   "note": ""
+  },
+  {
+   "utterance": "Hledám doktora Vasilevsku, neurologa v Targoviste.",
+   "fields": {
+    "surname": "Vasilevsku",
+    "first_name": null,
+    "speciality": "neurolog",
+    "city": "Targoviste",
+    "language": null
+   },
+   "target": {
+    "surname": "Vasilescu",
+    "city": "Targoviste",
+    "speciality": "Neurology"
+   },
+   "note": ""
+  },
+  {
+   "utterance": "Dobrý den, potřebuji, ee kardiologa, stane zkus. Temešváru.",
+   "fields": {
+    "surname": "stane zkus",
+    "first_name": null,
+    "speciality": "kardiolog",
+    "city": "Temešvár",
+    "language": null
+   },
+   "target": {
+    "surname": "Stanescu",
+    "city": "Timisoara",
+    "speciality": "Cardiology"
+   },
+   "note": "surname shattered"
+  },
+  {
+   "utterance": "Dobrý den, schání pediatra čivu v Brasově.",
+   "fields": {
+    "surname": "čivu",
+    "first_name": null,
+    "speciality": "pediatr",
+    "city": "Brasov",
+    "language": null
+   },
+   "target": {
+    "surname": "Chivu",
+    "city": "Brasov",
+    "speciality": "Pediatrics"
+   },
+   "note": ""
+  },
+  {
+   "utterance": "Dobrý den, já scháním praktickou lékařku, paní doktorku. Popescu z Or, Oradei.",
+   "fields": {
+    "surname": "Popescu",
+    "first_name": null,
+    "speciality": "praktická lékařka",
+    "city": "Oradei",
+    "language": null
+   },
+   "target": {
+    "surname": "Popescu",
+    "city": "Oradea",
+    "speciality": "Family Medicine"
+   },
+   "note": ""
+  },
+  {
+   "utterance": "Dobrý den, ... doktor Drahomír. Gastro. enterolog. Jasi.",
+   "fields": {
+    "surname": "Drahomír",
+    "first_name": null,
+    "speciality": "gastroenterolog",
+    "city": "Jasi",
+    "language": null
+   },
+   "target": {
+    "surname": "Dragomir",
+    "city": "Iasi",
+    "speciality": "Gastroenterology"
+   },
+   "note": ""
+  },
+  {
+   "utterance": "Dobrý den, potřeboval bych e-mail na pana doktora Floriana Vasilevsku.",
+   "fields": {
+    "surname": "Vasilevsku",
+    "first_name": "Floriana",
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": "Vasilescu",
+    "city": null,
+    "speciality": null
+   },
+   "note": ""
+  },
+  {
+   "utterance": "Dobrý den, ... nějakého kardiologa, v Temešváru.",
+   "fields": {
+    "surname": null,
+    "first_name": null,
+    "speciality": "kardiolog",
+    "city": "Temešvár",
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": "Timisoara",
+    "speciality": "Cardiology"
+   },
+   "note": ""
+  },
+  {
+   "utterance": "Dobrý den, chtěl bych kontakt na nějakého dětskýho lékaře v Kůži.",
+   "fields": {
+    "surname": null,
+    "first_name": null,
+    "speciality": "dětský lékař",
+    "city": "Kůži",
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": "Cluj-Napoca",
+    "speciality": "Pediatrics"
+   },
+   "note": ""
+  },
+  {
+   "utterance": "Dobrý den, scháním ginekologa v ploj testi? který mluví maďarským.",
+   "fields": {
+    "surname": null,
+    "first_name": null,
+    "speciality": "gynekolog",
+    "city": "ploj testi",
+    "language": "maďarsky"
+   },
+   "target": {
+    "surname": null,
+    "city": "Ploiesti",
+    "speciality": "Obstetrics and Gynecology"
+   },
+   "note": ""
+  },
+  {
+   "utterance": "A jaký na něj máte telefon?",
+   "fields": {
+    "surname": null,
+    "first_name": null,
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": null,
+    "speciality": null
+   },
+   "note": "follow-up contact, no lookup"
+  },
+  {
+   "utterance": "Môžete mi na nej dať číslo? A adresu?",
+   "fields": {
+    "surname": null,
+    "first_name": null,
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": null,
+    "speciality": null
+   },
+   "note": "follow-up contact, Slovak"
+  },
+  {
+   "utterance": "Že jsou ty, ee, údaje aktuální?",
+   "fields": {
+    "surname": null,
+    "first_name": null,
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": null,
+    "speciality": null
+   },
+   "note": "freshness, no lookup"
+  },
+  {
+   "utterance": "Bolí mě ještě jeden hlava. Co si na to mám vzít?",
+   "fields": {
+    "surname": null,
+    "first_name": null,
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": null,
+    "speciality": null
+   },
+   "note": "out of scope"
+  },
+  {
+   "utterance": "Silnou bolest na hrudi a špatně se mi dýchá.",
+   "fields": {
+    "surname": null,
+    "first_name": null,
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": null,
+    "speciality": null
+   },
+   "note": "emergency 155"
+  },
+  {
+   "utterance": "Dovolal jsem se na pohotovost?",
+   "fields": {
+    "surname": null,
+    "first_name": null,
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": null,
+    "speciality": null
+   },
+   "note": "not an emergency line, no lookup"
+  },
+  {
+   "utterance": "Potřebuji rychle vědět, jak zastavit krvácení.",
+   "fields": {
+    "surname": null,
+    "first_name": null,
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": null,
+    "speciality": null
+   },
+   "note": "emergency 155"
+  },
+  {
+   "utterance": "Kamarád upadl. na hlavu a potřebuji vědět, jestli s ním můžu hýbat.",
+   "fields": {
+    "surname": null,
+    "first_name": null,
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": null,
+    "speciality": null
+   },
+   "note": "emergency 155"
+  },
+  {
+   "utterance": "Amate na pana doktora nějaký jeho osobní číslo, já se mu nemohu dovolat.",
+   "fields": {
+    "surname": null,
+    "first_name": null,
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": null,
+    "speciality": null
+   },
+   "note": "follow-up contact"
+  },
+  {
+   "utterance": "Můžete panu doktorovi říct, že jsem ho schránil?",
+   "fields": {
+    "surname": null,
+    "first_name": null,
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": null,
+    "speciality": null
+   },
+   "note": "out of scope, no messages"
+  },
+  {
+   "utterance": "Dobrý den, potřebuji telefon na pana, doktora. Vlada Moldanová.",
+   "fields": {
+    "surname": "Moldanová",
+    "first_name": "Vlada",
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": "Moldovan",
+    "city": null,
+    "speciality": null
+   },
+   "note": ""
+  },
+  {
+   "utterance": "Dobrý den, potřeboval bych adresu. Na pana Rusu Andreje. Ze Santumare.",
+   "fields": {
+    "surname": "Rusu",
+    "first_name": "Andreje",
+    "speciality": null,
+    "city": "Santumare",
+    "language": null
+   },
+   "target": {
+    "surname": "Rusu",
+    "city": "Satu Mare",
+    "speciality": null
+   },
+   "note": ""
+  }
+ ],
+ "followups": [
+  {
+   "utterance": "v Kluži",
+   "fields": {
+    "surname": null,
+    "first_name": null,
+    "speciality": null,
+    "city": "Kluži",
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": "Cluj-Napoca",
+    "speciality": null
+   },
+   "note": ""
+  },
+  {
+   "utterance": "tam je Švár",
+   "fields": {
+    "surname": null,
+    "first_name": null,
+    "speciality": null,
+    "city": "tam je Švár",
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": "Timisoara",
+    "speciality": null
+   },
+   "note": "STT shattered Temesvar"
+  },
+  {
+   "utterance": "v Jasech",
+   "fields": {
+    "surname": null,
+    "first_name": null,
+    "speciality": null,
+    "city": "Jasech",
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": "Iasi",
+    "speciality": null
+   },
+   "note": ""
+  },
+  {
+   "utterance": "Satu mare",
+   "fields": {
+    "surname": null,
+    "first_name": null,
+    "speciality": null,
+    "city": "Satu mare",
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": "Satu Mare",
+    "speciality": null
+   },
+   "note": ""
+  },
+  {
+   "utterance": "Nevím přesně, někde v Semihradsku",
+   "fields": {
+    "surname": null,
+    "first_name": null,
+    "speciality": null,
+    "city": "Semihradsko",
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": null,
+    "speciality": null
+   },
+   "note": "a region, not a city"
+  },
+  {
+   "utterance": "Dáryu",
+   "fields": {
+    "surname": null,
+    "first_name": "Dáryu",
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": null,
+    "speciality": null
+   },
+   "note": "expect Daria"
+  },
+  {
+   "utterance": "Bogdana",
+   "fields": {
+    "surname": null,
+    "first_name": "Bogdana",
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": null,
+    "speciality": null
+   },
+   "note": "expect Bogdan"
+  },
+  {
+   "utterance": "Laura ta pediatrička",
+   "fields": {
+    "surname": null,
+    "first_name": "Laura",
+    "speciality": "pediatrička",
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": null,
+    "speciality": "Pediatrics"
+   },
+   "note": ""
+  },
+  {
+   "utterance": "Ta psychiatrička",
+   "fields": {
+    "surname": null,
+    "first_name": null,
+    "speciality": "psychiatrička",
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": null,
+    "speciality": "Psychiatry"
+   },
+   "note": ""
+  },
+  {
+   "utterance": "Kardiolog",
+   "fields": {
+    "surname": null,
+    "first_name": null,
+    "speciality": "Kardiolog",
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": null,
+    "speciality": "Cardiology"
+   },
+   "note": ""
+  },
+  {
+   "utterance": "Ne, Dumitrescu. Dumitru.",
+   "fields": {
+    "surname": "Dumitrescu",
+    "first_name": null,
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": null,
+    "speciality": null
+   },
+   "note": "caller wavers between two surnames"
+  },
+  {
+   "utterance": "Ne pan doktor Nestor n jako nůž",
+   "fields": {
+    "surname": "Nestor",
+    "first_name": null,
+    "speciality": null,
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": "Nistor",
+    "city": null,
+    "speciality": null
+   },
+   "note": "spelled out"
+  },
+  {
+   "utterance": "Vlastně radši Mikulov tam než Váru.",
+   "fields": {
+    "surname": null,
+    "first_name": null,
+    "speciality": null,
+    "city": "Mikulov",
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": null,
+    "speciality": null
+   },
+   "note": "STT nonsense for Temesvar"
+  },
+  {
+   "utterance": "Ne gynekologa kardiologa",
+   "fields": {
+    "surname": null,
+    "first_name": null,
+    "speciality": "gynekolog",
+    "city": null,
+    "language": null
+   },
+   "target": {
+    "surname": null,
+    "city": null,
+    "speciality": "Obstetrics and Gynecology"
+   },
+   "note": "correction mid-call"
+  }
+ ]
+}

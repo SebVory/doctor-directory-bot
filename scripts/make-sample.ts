@@ -57,6 +57,21 @@ for (const indices of [...byAmbiguity.values()].filter((g) => g.length > 1).slic
   for (const i of indices) picked.add(i);
 }
 
+// Pin the irreducible pairs: same given name, surname, city and speciality,
+// differing only in phone, address and languages. Nothing a caller knows can
+// separate these, so they are what the languages fallback exists for — and
+// without one pinned, the test covering it silently passes on an empty set.
+const irreducibleKey = (r: Row): string =>
+  `${r.first_name}|${r.last_name}|${r.location}|${r.speciality}`;
+const byIrreducible = new Map<string, number[]>();
+rows.forEach((row, i) => {
+  const key = irreducibleKey(row);
+  byIrreducible.set(key, [...(byIrreducible.get(key) ?? []), i]);
+});
+for (const indices of [...byIrreducible.values()].filter((g) => g.length > 1).slice(0, 3)) {
+  for (const i of indices) picked.add(i);
+}
+
 // Pin a few id-collision groups: same name + clinic, different speciality and
 // phone. These are why the id is not just the three specified fields.
 const collisionKey = (r: Row): string => `${r.last_name}|${r.first_name}|${r.clinic_name}`;

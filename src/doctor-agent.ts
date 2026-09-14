@@ -19,6 +19,8 @@ Jak mluvíš (je to telefon, ne chat):
 
 Jak pracuješ:
 - Na dotaz po lékaři vždy zavolej find_doctors. Nikdy si lékaře nevymýšlej — když ho nemáš z nástroje, nemáš ho.
+- Přepis řeči komolí slova. Když věta obsahuje něco, co vypadá jako příjmení, a zároveň žádost o ordinační hodiny, kontakt nebo o nalezení lékaře, je to hledání lékaře — i když přepis napsal "restaurace" nebo "hotel" místo "doktorka". Cizojazyčný balast na začátku věty ignoruj.
+- Když má odpověď must_ask true, nikdy nejmenuj konkrétního lékaře jako odpověď. Polož otázku z best_question.
 - Když volající odpoví na tvou otázku, zavolej find_doctors znovu a předej mu všechno, co už víš — příjmení, křestní jméno, obor i město dohromady.
 - Když je v odpovědi unresolved neprázdné, ten pojem v naší síti není. Řekni to rovnou ("Brno v naší síti nemáme") a zeptej se na jiné město nebo obor. Nikdy nepředstírej, že výsledky odpovídají tomu, co volající řekl.
 - Když najdeš víc kandidátů, zeptej se přesně na to, co je v best_question: použij jeho attribute a vyjmenuj jeho options. Nikdy se neptej na údaj, který mají všichni kandidáti stejný. Například: "Doktorů Dumitrescu mám víc. V jakém městě ordinuje — v Kluži, v Oradeji, nebo v Galati?" Když je distinct_total větší než počet options, řekni "například", ať volající ví, že jsou i další.
@@ -118,6 +120,7 @@ function executeTool(name: string, input: Record<string, unknown>): string {
         })),
         candidates: result.candidates,
         needs_confirmation: result.needs_confirmation,
+        must_ask: result.must_ask,
         best_question: result.best_question,
         // The model has to know what we understood and what we could not place;
         // without these a term outside the network looks like a plain no-result.

@@ -1,180 +1,263 @@
 [
   {
-    "utterance": "Dobrý den, hledám doktora Dumitresku, psychiatra v Kluži.",
-    "expect": {
-      "tool": "find_doctors",
-      "args_include": {
-        "surname": "Dumitresku",
-        "speciality": "psychiatr",
-        "city": "Kluž"
-      },
-      "answer_includes": [
-        "Dumitrescu"
-      ],
-      "behaviour": "ask_clarification"
-    },
-    "note": "verified passing"
-  },
-  {
-    "utterance": "Hledám doktora Nyštora.",
-    "expect": {
-      "tool": "find_doctors",
-      "behaviour": "confirm_name"
-    },
-    "note": "confirm_name: Nyštor hits Nistor at 0.50, under the confirm threshold (Nyagu now resolves outright)"
-  },
-  {
-    "utterance": "Sháním doktora Nováka v Praze.",
-    "expect": {
-      "tool": "find_doctors",
-      "behaviour": "not_found"
-    },
-    "note": "verified passing"
-  },
-  {
-    "utterance": "",
-    "note": "happy path: Rusu | Infectious Diseases | Petrosani -> Georgiana (exactly one match)",
-    "expect": {
-      "tool": "find_doctors",
-      "args_include": {
-        "surname": "Rusu",
-        "city": "Petrosani"
-      },
-      "answer_includes": [
-        "Georgiana"
-      ]
-    }
-  },
-  {
-    "utterance": "",
-    "note": "happy path: Vasilescu | Neurology | Targoviste -> Florin (exactly one)",
-    "expect": {
-      "tool": "find_doctors",
-      "args_include": {
-        "surname": "Vasilescu",
-        "speciality": "neurolog"
-      }
-    }
-  },
-  {
-    "utterance": "",
-    "note": "happy path, no surname: speciality + city only, must not come back empty",
-    "expect": {
-      "tool": "find_doctors",
-      "args_include": {
-        "surname": null
-      }
-    }
-  },
-  {
-    "utterance": "",
-    "note": "happy path: language filter, e.g. pediatrician in Timisoara speaking Hungarian",
-    "expect": {
-      "tool": "find_doctors",
-      "args_include": {
-        "language": "maďarsky"
-      }
-    }
-  },
-  {
-    "utterance": "",
-    "note": "ask_clarification: Munteanu | Obstetrics and Gynecology | Ploiesti -> Daria, Bogdan",
+    "utterance": "Dobrý den, já vás zdravím, chtěl bych se zeptat, jestli máte číslo na doktora Dumistrésku.",
+    "note": "bare surname, 277 candidates: must ask, never name one, never volunteer contact",
     "expect": {
       "tool": "find_doctors",
       "behaviour": "ask_clarification",
-      "answer_includes": [
-        "Munteanu"
-      ]
-    }
-  },
-  {
-    "utterance": "",
-    "note": "ask_clarification: Chivu | Pediatrics | Brasov -> Radu, Laura",
-    "expect": {
-      "tool": "find_doctors",
-      "behaviour": "ask_clarification"
-    }
-  },
-  {
-    "utterance": "",
-    "note": "ask_clarification: Rusu | ENT | Constanta -> Radu, Daniel",
-    "expect": {
-      "tool": "find_doctors",
-      "behaviour": "ask_clarification"
-    }
-  },
-  {
-    "utterance": "",
-    "note": "data freshness: caller asks how current the data is -> answer must quote meta.loaded_at (ISO or D. M. YYYY)",
-    "expect": {
-      "tool": "find_doctors",
-      "answer_includes_data_as_of": true
-    }
-  },
-  {
-    "utterance": "",
-    "note": "confirm_name: pick a second mangling; verify its score first with npm run doctor",
-    "expect": {
-      "tool": "find_doctors",
-      "behaviour": "confirm_name"
-    }
-  },
-  {
-    "utterance": "",
-    "note": "not_found: surname absent from the data — Svoboda / Dvorak / Prochazka score 0.000. NOT Novak (0.222 -> confirms instead)",
-    "expect": {
-      "tool": "find_doctors",
-      "behaviour": "not_found"
-    }
-  },
-  {
-    "utterance": "",
-    "note": "not_found: a town outside the Romanian network",
-    "expect": {
-      "tool": "find_doctors",
-      "behaviour": "not_found"
-    }
-  },
-  {
-    "utterance": "",
-    "note": "contact ON request: caller explicitly asks for the phone number",
-    "expect": {
-      "tool": "get_doctor_contact"
-    }
-  },
-  {
-    "utterance": "",
-    "note": "out of scope: symptoms / diagnosis / medication / booking — no tool call, names no doctor, one short sentence",
-    "expect": {
-      "tool_not_called": "find_doctors",
-      "behaviour": "out_of_scope"
-    }
-  },
-  {
-    "utterance": "",
-    "note": "contact must NOT be volunteered: plain lookup with no request for a phone number",
-    "expect": {
-      "tool": "find_doctors",
       "tool_not_called": "get_doctor_contact"
     }
   },
   {
-    "utterance": "",
-    "note": "emergency: caller describes acute symptoms (chest pain, breathing difficulty, heavy bleeding, unconsciousness, stroke) -> one sentence, call 155, no search",
+    "utterance": "Dobrý den, já bych se chtěl zeptat, do kolika má restaurace Elena Dobryová?",
+    "note": "STT wrote 'restaurace' for 'doktorka' — still a doctor lookup",
     "expect": {
-      "tool_not_called": "find_doctors",
+      "tool": "find_doctors"
+    }
+  },
+  {
+    "utterance": "Dobrý den, potřeboval bych kontakt na paní Váselysku.",
+    "note": "surname alone scores 0.44, under the 0.6 bar that applies without other evidence",
+    "expect": {
+      "tool": "find_doctors",
+      "behaviour": "confirm_name"
+    }
+  },
+  {
+    "utterance": "Dobrý den, dokolika má doktorka, ee, Georgievska? Co dělá v pediatrii?",
+    "note": "speciality narrows but many remain",
+    "expect": {
+      "tool": "find_doctors",
+      "behaviour": "ask_clarification"
+    }
+  },
+  {
+    "utterance": "Dobrý den, chtěl jsem se zeptat, dokolika má paní doktorka na pulmonologii, paní doktorku z Tanců by chtěla?",
+    "note": "STT dropped the S from Stancu; speciality carries it",
+    "expect": {
+      "tool": "find_doctors",
+      "behaviour": "ask_clarification"
+    }
+  },
+  {
+    "utterance": "Hello, hello, Slishy Messer.",
+    "note": "line check, not a lookup — answer in Czech, touch nothing",
+    "expect": {
+      "behaviour": "out_of_scope",
+      "tool_not_called": "find_doctors"
+    }
+  },
+  {
+    "utterance": "Dobrý den, je tam pan doktor Bob Hordyska, potřeboval bych s ním mluvit.",
+    "note": "no such surname (best 0.14): must not offer a near-miss as if it were found",
+    "expect": {
+      "tool": "find_doctors",
+      "behaviour": "not_found"
+    }
+  },
+  {
+    "utterance": "Dobrý den, nemůžu se dovolat paní doktorce Rusové a potřeboval bych na ní číslo, aktuální.",
+    "note": "Czech feminine -ové stripped; 283 candidates",
+    "expect": {
+      "tool": "find_doctors",
+      "behaviour": "ask_clarification"
+    }
+  },
+  {
+    "utterance": "Já vás zdravím, ee, chtěl bych. Vlastně se zeptat, na. Kontakt, na pana doktora. Diakonu.",
+    "note": "name split by full stops",
+    "expect": {
+      "tool": "find_doctors",
+      "behaviour": "ask_clarification"
+    }
+  },
+  {
+    "utterance": "Já vás zdravím, potřeboval bych kontakt na někoho z kliniky Targu Murešker.",
+    "note": "186 candidates and no surname: must_ask, never name one",
+    "expect": {
+      "tool": "find_doctors",
+      "behaviour": "ask_clarification",
+      "tool_not_called": "get_doctor_contact"
+    }
+  },
+  {
+    "utterance": "Dobrý den, chtěl bych se zeptat, paní doktorka Nikola Čiová, tady od nás z Botosany, jaké, jaké má číslo, prosím?",
+    "note": "Čiová reaches nothing (0.22) even with the city: not_found, never a guess",
+    "expect": {
+      "tool": "find_doctors",
+      "behaviour": "not_found"
+    }
+  },
+  {
+    "utterance": "Hledám doktora Vasilevsku, neurologa v Targoviste.",
+    "note": "everything given, exactly one match",
+    "expect": {
+      "tool": "find_doctors",
+      "answer_includes": [
+        "Vasilescu"
+      ],
+      "tool_not_called": "get_doctor_contact"
+    }
+  },
+  {
+    "utterance": "Dobrý den, schání pediatra čivu v Brasově.",
+    "note": "0.50 inside 'paediatrician in Brasov' is evidence enough — ask which of the two, do not re-confirm",
+    "expect": {
+      "tool": "find_doctors",
+      "behaviour": "ask_clarification"
+    }
+  },
+  {
+    "utterance": "Dobrý den, já scháním praktickou lékařku, paní doktorku. Popescu z Or, Oradei.",
+    "note": "no Popescu in family medicine in Oradea: not_found, never Dumitrescu at 0.31",
+    "expect": {
+      "tool": "find_doctors",
+      "behaviour": "not_found"
+    }
+  },
+  {
+    "utterance": "Dobrý den, potřeboval bych vědět, do kolika hodin je dnes doktor Drahomír. Gastro. enterolog. Jasi.",
+    "note": "name, speciality and city all split by full stops; resolves to one",
+    "expect": {
+      "tool": "find_doctors",
+      "answer_includes": [
+        "Dragomir"
+      ]
+    }
+  },
+  {
+    "utterance": "Dobrý den, potřebuji telefon na pana, doktora. Vlada Moldanová.",
+    "note": "0.55 with a given name alongside: narrow, do not confirm",
+    "expect": {
+      "tool": "find_doctors",
+      "behaviour": "ask_clarification"
+    }
+  },
+  {
+    "utterance": "Dobrý den, chtěl jsem si zeptat, potřebuji, ee, nějakého kardiologa, v Temešváru.",
+    "note": "no surname at all; speciality plus city",
+    "expect": {
+      "tool": "find_doctors",
+      "behaviour": "ask_clarification"
+    }
+  },
+  {
+    "utterance": "Dobrý den, scháním ginekologa v ploj testi? který mluví maďarským.",
+    "note": "STT split Ploiesti across a space; language filter too",
+    "expect": {
+      "tool": "find_doctors"
+    }
+  },
+  {
+    "utterance": "Silnou bolest na hrudi a špatně se mi dýchá.",
+    "note": "acute: one sentence, 155, no tool",
+    "expect": {
       "behaviour": "emergency",
+      "tool_not_called": "find_doctors",
       "answer_includes": [
         "155"
       ]
     }
   },
   {
+    "utterance": "Potřebuji rychle vědět, jak zastavit krvácení.",
+    "note": "acute bleeding",
+    "expect": {
+      "behaviour": "emergency",
+      "tool_not_called": "find_doctors"
+    }
+  },
+  {
+    "utterance": "Bolí mě ještě jeden hlava. Co si na to mám vzít?",
+    "note": "medication question, not acute: decline and offer a speciality",
+    "expect": {
+      "behaviour": "out_of_scope",
+      "tool_not_called": "find_doctors"
+    }
+  },
+  {
+    "utterance": "Můžete panu doktorovi říct, že jsem ho schránil?",
+    "note": "contains a doctor and a request, but is not a lookup — no messages taken",
+    "expect": {
+      "behaviour": "out_of_scope",
+      "tool_not_called": "find_doctors"
+    }
+  },
+  {
+    "utterance": "Že jsou ty, ee, údaje aktuální?",
+    "note": "freshness: quote the snapshot date",
+    "expect": {
+      "answer_includes_data_as_of": true
+    }
+  },
+  {
     "turns": [
-      "",
-      ""
+      "Dobrý den, já vás zdravím, chtěl bych se zeptat, jestli máte číslo na doktora Dumistrésku.",
+      "v Kluži"
     ],
-    "note": "MULTI-TURN: turn 1 finds Florin Vasilescu (neurolog, Targoviste), turn 2 asks for his phone — get_doctor_contact must fire on the SECOND turn only",
+    "note": "city answer narrows 277 to 11, still too many to name one",
+    "expect": {
+      "turn_behaviours": [
+        "ask_clarification",
+        "ask_clarification"
+      ],
+      "tool_not_called": "get_doctor_contact"
+    }
+  },
+  {
+    "turns": [
+      "Dobrý den, já vás zdravím, chtěl bych se zeptat, jestli máte číslo na doktora Dumistrésku.",
+      "v Kluži",
+      "Dáryu"
+    ],
+    "note": "city then given name: lands on one, contact never volunteered",
+    "expect": {
+      "turn_behaviours": [
+        "ask_clarification",
+        "ask_clarification",
+        null
+      ],
+      "answer_includes": [
+        "Dumitrescu"
+      ],
+      "tool_not_called": "get_doctor_contact"
+    }
+  },
+  {
+    "turns": [
+      "Dobrý den, já vás zdravím, chtěl bych se zeptat, jestli máte číslo na doktora Dumistrésku.",
+      "Ta psychiatrička"
+    ],
+    "note": "speciality answered instead of the city that was asked",
+    "expect": {
+      "turn_behaviours": [
+        "ask_clarification",
+        "ask_clarification"
+      ]
+    }
+  },
+  {
+    "turns": [
+      "Dobrý den, potřeboval bych kontakt na paní Váselysku.",
+      "Jo jo to je on"
+    ],
+    "note": "confirmation accepted: carry on with Vasilescu, do not ask the same thing again",
+    "expect": {
+      "turn_behaviours": [
+        "confirm_name",
+        null
+      ],
+      "answer_includes": [
+        "Vasilescu"
+      ]
+    }
+  },
+  {
+    "turns": [
+      "Hledám doktora Vasilevsku, neurologa v Targoviste.",
+      "A jaký na něj máte telefon?"
+    ],
+    "note": "contact only once asked for, and only on the second turn",
     "expect": {
       "tool_on_turn": {
         "tool": "get_doctor_contact",
@@ -184,48 +267,17 @@
   },
   {
     "turns": [
-      "",
-      ""
+      "Dobrý den, já vás zdravím, chtěl bych se zeptat, jestli máte číslo na doktora Dumistrésku.",
+      "v Kluži",
+      "Ne gynekologa kardiologa"
     ],
-    "note": "MULTI-TURN ask then pick: turn 1 finds several Dumitrescu in Cluj-Napoca, turn 2 picks the psychiatrist Ionut — no contact volunteered",
-    "expect": {
-      "answer_includes": [
-        "Ionut"
-      ],
-      "tool_not_called": "get_doctor_contact"
-    }
-  },
-  {
-    "turns": [
-      "",
-      ""
-    ],
-    "note": "MULTI-TURN confirm then yes: turn 1 mishears Nystor and asks to confirm, turn 2 confirms — bot proceeds with Nistor, still no contact",
-    "expect": {
-      "answer_includes": [
-        "Nistor"
-      ],
-      "tool_not_called": "get_doctor_contact"
-    }
-  },
-  {
-    "turns": [
-      "Hledám doktora Dumitresku",
-      "V Kluži",
-      "Alinu"
-    ],
-    "note": "MULTI-TURN narrowing: 277 candidates -> city -> given name -> exactly one. Turns 1 and 2 must ask a question naming options; turn 3 answers with just the given name and must land on one doctor; contact never requested.",
+    "note": "speciality corrected mid-call: keep the surname and city, take the last speciality",
     "expect": {
       "turn_behaviours": [
         "ask_clarification",
         "ask_clarification",
         null
-      ],
-      "answer_includes": [
-        "Alin",
-        "Dumitrescu"
-      ],
-      "tool_not_called": "get_doctor_contact"
+      ]
     }
   }
 ]
