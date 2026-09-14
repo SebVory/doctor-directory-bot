@@ -38,10 +38,16 @@ reálných bězích jsou v kódu: explicitní akutní situace vrací před model
 takže z něj nejde vytáhnout kontakt, a neznámé město nebo obor nerozšíří hledání
 na celý seznam.
 
-**Kde je limit.** Poslední běh na 44 případech skončil 42/44. Jeden fail je
-checker, druhý je důležitější: model jednou zkrátil `stane zkus` na `stane`
-ještě před toolem a tím obešel score-gated confirmation. Evals to zachytily, ale
-současná verbatim garance je stále promptová. Další pilotní krok je držet raw
+**Jak to dopadlo.** Poslední plný běh skončil 42/44, tedy 95 %. Není to ale těch
+95 % z discovery: cíl mluví o podílu hovorů vyřízených bez předání člověku,
+kdežto eval sada je schválně sbírka těžkých případů, ne vzorek provozu. Dokud
+neběží shadow mode vedle recepce, je eval skóre proxy a containment nemám čím
+změřit.
+
+**Kde je limit.** Jeden fail je checker, druhý je důležitější: model jednou
+zkrátil `stane zkus` na `stane` ještě před toolem a tím obešel score-gated
+confirmation. Evals to zachytily, ale současná verbatim garance je stále
+promptová. Další pilotní krok je držet raw
 STT span mimo model a jistotu počítat pesimisticky. Netvrdím, že je tato část
 hotová.
 
