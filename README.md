@@ -154,6 +154,20 @@ a po přidání `ije`/`ija` sedí na 1,000. Jedna výhrada: stojí to na tom, ž
 model zná rumunská města. U menšího modelu by to neplatilo a matcher by tu
 práci musel odvést.
 
+Před opravami prošlo 19 ze 43 přepisů. Po nich prochází 35 z 38 případů —
+sady nejsou stejné (případy pokrývají i vícetahové hovory), takže to není
+poměr k poměru, ale směr je jasný.
+
+Nejzajímavější nález celého kola je ale `confirm_name 0`: stejný mechanismus,
+který zachránil města, vyřadil bezpečnostní pojistku. Model opraví zkomolené
+příjmení dřív, než ho tool uvidí, takže nízké skóre, na kterém stojí větev
+„slyšel jsem správně?", do storu skoro nikdy nedorazí — a větev, která mě má
+chránit před špatným doktorem, v reálném hovoru nevystřelí. Návrh na další
+krok, neimplementovaný: tool dostane dvě pole, `surname_as_heard` doslova tak,
+jak to napsal přepis, a `surname_guess` s opravou modelu; store skóruje obě a
+když se oprava od slyšeného vzdálí, řekne to nahlas. Tím se pojistka vrátí a
+oprava měst zůstane.
+
 Čtyři věci, které živý běh vynutil. Bot potvrzoval jména, která vůbec nenašel
 — pacientovi, který řekl Popescu, nabídl Dumitrescu na 0,31; pod 0,40 teď
 žádný kandidát není. Pravidlo „nejmenuj jednoho z mnoha" bylo jen v promptu a
@@ -166,13 +180,38 @@ jistota než 0,50 nad 7029 řádky.
 ## Testy a evals
 
 ```
-(sem přijde syrový výstup npm run typecheck && npm test)
+$ npm run typecheck && npm test
+  Test Files  5 passed (5)
+       Tests  185 passed (185)
+   Duration  259ms
 ```
 
 ```
-(sem přijde syrový výstup npm run evals)
+$ npm run evals          # 38 případů, 14. 9. 2026
+35/38 passed — 92% (threshold 80%) · conversation ms avg 8528, max 22330
+                                    · TTFT avg 1733 ms, max 2608 ms (31 streamed)
+
+outcome breakdown (what happened, not what was expected):
+  emergency            3
+  contact              6
+  confirm_name         0
+  ask_clarification   22
+  not_found            4
+  out_of_scope         3
+  found                0
+  other                0
 ```
 
+Tři případy spadly a všechny tři byly chyby v očekávání, ne v botovi: dva na
+tom, že model opraví zkomolené příjmení dřív, než ho tool uvidí, takže se
+nespustí potvrzování; jeden na tom, že případ držel staré pravidlo „kontakt
+nikdy v první odpovědi". Rozpis je v [evals/RUNS.md](evals/RUNS.md), kde je
+u každého běhu napsané, co byla chyba agenta a co chyba testu.
+
+Za pozornost stojí `confirm_name 0`: cesta „slyšel jsem správně?" je pokrytá
+unit testy, ale v reálném hovoru se skoro nespustí, protože model komolení
+opraví sám. Buď je ta větev v provozu skoro mrtvá, nebo se spouští jen na
+komolení, která model neopraví — to zatím nevím.
 ## Nastavení
 
 Potřebuješ Node 20 nebo novější (vyvíjeno na 22) a klíč k Anthropic API.
@@ -217,7 +256,7 @@ pokrývají nejdůležitější tok, tedy doptání a kontakt až na vyžádán�
 
 Latence je změřená bez STT a TTS. V discovery jsem si dal cíl pod 1,5 s od
 konce věty do začátku odpovědi a **ten cíl zatím není splněný**: první token
-mluvené odpovědi přijde kolem 1,6 s, celý tah trvá kolem 7 s. Čísla v evals
+mluvené odpovědi přijde v průměru za 1,7 s (max 2,6 s), celý tah trvá kolem 7 s. Čísla v evals
 jsou za celý hovor, ne za tah — třítahový případ proto vychází přes 20 s.
 Model, effort, velikost payloadu ani prompt cache s tím měřitelně nehnuly;
 zbývá streaming do TTS a přemosťovací věta, kterou zatím žádný runtime

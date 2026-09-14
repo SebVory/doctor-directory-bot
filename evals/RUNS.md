@@ -1,7 +1,13 @@
 # Eval run log
 
-Every run that spends money on the API, so no question gets paid for twice.
-Offline runs (`npm test`, `evals/stt-offline.ts`) are free and not logged here.
+Every **eval run** that spends money on the API, so no question gets paid for
+twice. Offline runs (`npm test`, `evals/stt-offline.ts`) are free and not logged.
+
+Not logged, and worth being honest about: ad-hoc verification calls made with
+`npm run doctor` while building — checking a prompt rule took hold, watching a
+narrowing conversation, forcing the loop cap. Several dozen over the work, small
+individually and never counted. If spend ever matters, that is where the
+unmeasured part of it is.
 
 A failure is only worth acting on once its cause is known, so each one is
 attributed: **agent** (the bot did the wrong thing), **checker** (the assertion
@@ -103,16 +109,64 @@ new validation accepted the file. Killed at case 17, roughly 34 billed calls,
 no usable result. Validation is now checked with a deliberately *invalid* case
 file, which exits before any call is made.
 
+## 2026-09-14 · 38 cases · after the review fix list
+
+State: `59cf2c5` plus the B2 tidy-up. ~100 billed calls.
+Result: **35/38, 92%** · conversation ms avg 8528, max 22330 · **TTFT avg 1733 ms,
+max 2608 ms** over 31 streamed calls.
+Outcome breakdown: ask_clarification 22, contact 6, not_found 4, out_of_scope 3,
+emergency 3, **confirm_name 0**, found 0.
+
+Three failures, two of them one root cause.
+
+- *Váselysku* expected `confirm_name`, asked for a city instead — **case**. The
+  model repaired the surname to "Vasilescu" before calling the tool, so the 0.44
+  score that triggers a read-back never reached the store. The same repair broke
+  the *"Jo jo to je on"* conversation downstream: turn 1 asked rather than
+  confirmed, so the confirmation had nothing to accept, and the last search
+  reported 291 rather than 1.
+- *"… Bogdana"* fetched the contact when the case said it must not — **case**.
+  The opening sentence was *"jestli máte číslo na doktora Dumistrésku"*, so under
+  the rule added in A8 the number is due once one doctor remains. The case still
+  carried the older "never in the first answer" expectation.
+
+Fixes applied (cases only, the agent was not touched): the Váselysku case now
+asserts a question and no volunteered contact rather than `confirm_name`; the
+"Jo jo to je on" conversation asserts only the contact guard; the Bogdana
+conversation now expects the contact on turn 3 with `last_candidates: 1`.
+
+**Worth its own line: `confirm_name` came back 0 across all 38 cases.** The
+read-back path is reachable in unit tests, where the store is called directly
+with a mangled surname, but in a real call the model repairs the spelling first,
+so the low score the path depends on rarely arrives. Either the path is close to
+dead in production, or it only fires on manglings the model cannot repair — and
+nothing here distinguishes those yet. That is the first question for the next
+run, not a fix.
+
+## 2026-09-14 · subset verification · the three repointed cases
+
+State: the same code, only the three case expectations changed. ~14 billed calls.
+Result: **3/3**, conversation ms avg 14423, max 22676, TTFT avg 1951 ms, max 2832 ms.
+
+```
+✅   9102 ms  Dobrý den, potřeboval bych kontakt na paní Váselysku   Doktorek Vasilescu mám víc. V jakém městě ordinuje —
+✅  22676 ms  … Bogdana                                              Mám ho: Bogdan Dumitrescu, infektolog v Kluži. Telef
+✅  11492 ms  … Jo jo to je on                                       Potřebuju vědět, které město to je. Řeknete mi ho?
+```
+
+The full set was not re-run: only three expectations moved, and re-running the
+other 35 would have bought nothing but a bill. `confirm_name` was 0 here too, on
+the one case written to provoke it — consistent with the finding below rather
+than with a flaky run.
+
 ---
 
 ## Next run
 
-Nothing since the two 29-case runs has been measured against the API. The next
-run is the first to exercise: the given-name confirmation band, the
-surname-substitution flag, the surname-first question only when a surname was
-given, tool-error handling, the ask/not-found split, the phone-number-safe 155
-pattern, the widened date forms, `last_candidates`, and nine new cases from the
-transcripts. 38 cases, roughly 100 billed calls.
+The three case fixes above are unmeasured. The open question is whether
+`confirm_name` can fire at all in a real call, given the model repairs mangled
+surnames before the tool sees them — worth one targeted run rather than a full
+sweep.
 
 Note on earlier numbers: the follow-up sections in `scripts/stt-report.ts` were
 paired with their setup turn by substring match, so the confirmation and

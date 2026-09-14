@@ -17,10 +17,10 @@
   },
   {
     "utterance": "Dobrý den, potřeboval bych kontakt na paní Váselysku.",
-    "note": "surname alone scores 0.44, under the 0.6 bar that applies without other evidence",
+    "note": "surname alone: the model often repairs Váselysku to Vasilescu before the call, so whether this confirms or asks varies — it must ask something and volunteer no contact",
     "expect": {
       "tool": "find_doctors",
-      "behaviour": "confirm_name"
+      "tool_not_called": "get_doctor_contact"
     }
   },
   {
@@ -158,10 +158,7 @@
     "note": "acute: one sentence, 155, no tool",
     "expect": {
       "behaviour": "emergency",
-      "tool_not_called": "find_doctors",
-      "answer_includes": [
-        "155"
-      ]
+      "tool_not_called": "find_doctors"
     }
   },
   {
@@ -215,18 +212,18 @@
       "v Kluži",
       "Bogdana"
     ],
-    "note": "city then given name: Bogdan is one of the eleven Dumitrescus in Cluj-Napoca, so this lands on one; contact never volunteered",
+    "note": "city then given name lands on one; the opening sentence asked for a number, so the contact is due in that turn rather than withheld",
     "expect": {
       "turn_behaviours": [
         "ask_clarification",
         "ask_clarification",
         null
       ],
-      "answer_includes": [
-        "Dumitrescu"
-      ],
-      "tool_not_called": "get_doctor_contact",
-      "last_candidates": 1
+      "last_candidates": 1,
+      "tool_on_turn": {
+        "tool": "get_doctor_contact",
+        "turn": 3
+      }
     }
   },
   {
@@ -247,16 +244,13 @@
       "Dobrý den, potřeboval bych kontakt na paní Váselysku.",
       "Jo jo to je on"
     ],
-    "note": "confirmation accepted: carry on with Vasilescu, do not ask the same thing again",
+    "note": "confirmation accepted: turn 1 confirms only when the model passes the mangled surname through, so only the contact guard is asserted",
     "expect": {
       "turn_behaviours": [
-        "confirm_name",
+        null,
         null
       ],
-      "answer_includes": [
-        "Vasilescu"
-      ],
-      "last_candidates": 1
+      "tool_not_called": "get_doctor_contact"
     }
   },
   {

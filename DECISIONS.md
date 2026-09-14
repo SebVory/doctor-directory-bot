@@ -269,6 +269,74 @@ refusal. Those are where effort goes.
 
 ---
 
+## 13. A threshold that cannot exist
+
+**Question.** A given name was allowed to stand in for a neighbour — "Ana"
+returning Diana. Raise the floor so it cannot?
+
+**Measured.**
+
+```
+Dáryu vs Daria   0.483   ← a real transcript, must be kept
+Ana   vs Diana   0.500   ← must not be acted on
+```
+
+**Decided.** The one that must be rejected scores *higher* than the one that must
+be kept, so no floor separates them. A floor at 0.75 drops both; a floor at 0.45
+keeps both. What separates them is not a number, it is asking: the floor now only
+removes noise, and a second band (0.85) makes anything below it read the name
+back. Worth remembering the shape of this — when two cases invert across a
+threshold, the threshold is the wrong instrument.
+
+---
+
+## 14. A flag that never reached the model
+
+**Question.** A caller says a surname that really exists and the best hit carries
+a different real surname. Never substitute silently.
+
+**Built.** The store computes `surname_substituted`, returns it, forces a
+confirmation, and is unit-tested.
+
+**Found on review.** It was not in the tool payload and no prompt rule mentioned
+it, so in a live call it did nothing beyond a generic read-back. Three layers
+agreed the feature existed — the implementation, the type, and the test — and the
+model never saw it.
+
+**Decided.** Unit tests on a store function prove the function. They prove
+nothing about whether the agent receives its output. Anything added to
+`FindResult` now gets checked at the payload and in the prompt before it counts
+as done.
+
+---
+
+## 15. The repair that disabled a safety branch
+
+**Question.** After the transcript fixes, how often does the read-back path fire?
+
+**Measured.** `confirm_name` came back **0** across all 38 cases, and **0** again
+in a three-case subset containing the one case written to provoke it.
+
+**Why.** The model repairs a mangled surname before calling the tool. The low
+score the branch depends on never arrives at the store. The same behaviour that
+made the city fixes unnecessary — "Kůži" arriving as "Kluž" — also means
+"Váselysku" arrives as "Vasilescu" at 1.000 instead of 0.44.
+
+**Decided.** Not fixed here, because the fix is a design change rather than a
+tweak. The branch is reachable in unit tests, which call the store directly, and
+close to unreachable in production. Proposed: the tool takes
+`surname_as_heard` — the transcript verbatim, which the model is told not to
+correct — alongside `surname_guess`. The store scores both and confirms aloud
+when the correction drifts far from what was heard. That restores the guard
+without giving up the repair.
+
+**The general lesson, which is the point of this entry.** An upstream component
+silently improving its input can disable a downstream safety check, and every
+test still passes, because the tests feed the downstream component directly. The
+only thing that caught it was a counter of what actually happened per call.
+
+---
+
 ## What is deliberately not done
 
 - **Four-letter surnames** other than the two fixed by the table rules. They fail
