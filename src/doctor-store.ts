@@ -302,9 +302,10 @@ export function findDoctors(query: FindQuery): FindResult {
     hasNearExact ? entry.score >= DOMINANCE_FLOOR : entry.score > 0,
   );
 
-  // A speciality, city or given name alongside the surname is independent
-  // evidence, so the bar for acting without confirmation comes down.
-  const narrowed = speciality !== null || city !== null || firstNorm !== null;
+  // A speciality, city, language or given name alongside the surname is
+  // independent evidence, so the bar for acting without confirmation comes down.
+  const narrowed =
+    speciality !== null || city !== null || language !== null || firstNorm !== null;
   const confirmThreshold = narrowed ? CONFIRM_THRESHOLD_NARROWED : CONFIRM_THRESHOLD;
 
   // Once anything clears the confirm threshold, weaker rows are noise rather than

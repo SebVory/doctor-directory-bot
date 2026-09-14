@@ -112,6 +112,13 @@ describe("confirm threshold depends on how much evidence there is", () => {
     expect(narrowed.needs_confirmation).toBe(false);
   });
 
+  it("a language counts as narrowing too", () => {
+    // Nystor alone confirms at 0.50; with a language filter the same score is
+    // evidence enough to act on.
+    expect(findDoctors({ surname: "Nyštor" }).needs_confirmation).toBe(true);
+    expect(findDoctors({ surname: "Nyštor", language: "maďarsky" }).needs_confirmation).toBe(false);
+  });
+
   it("a given name counts as narrowing too", () => {
     const narrowed = findDoctors({ surname: "Moldanová", first_name: "Vlad" });
     expect(narrowed.matches[0]?.last_name).toBe("Moldovan");
