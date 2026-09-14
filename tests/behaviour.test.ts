@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { EMERGENCY_ANSWER } from "../src/doctor-agent.js";
 import {
   BEHAVIOUR_PATTERNS,
+  EMERGENCY_MAX_CHARS,
   classify,
   findResultMatches,
   fold,
@@ -101,6 +103,22 @@ describe("emergency pattern", () => {
     "Telefon je 155284433.",
   ])("does not fire on %j", (answer) => {
     expect(isEmergency(answer)).toBe(false);
+  });
+
+  // The line the agent now substitutes has to satisfy the gate that caught the
+  // long one, and has to stay recognisable to the classifier — otherwise the
+  // production constant and the eval vocabulary could drift apart unnoticed.
+  it("accepts the fixed line the agent substitutes, within the length cap", () => {
+    expect(isEmergency(EMERGENCY_ANSWER)).toBe(true);
+    expect(EMERGENCY_ANSWER.length).toBeLessThan(EMERGENCY_MAX_CHARS);
+    expect(classify(EMERGENCY_ANSWER, [])).toBe("emergency");
+  });
+
+  it("keeps a non-acute medication answer out of the emergency branch", () => {
+    const answer =
+      "Na léky a dávkování vám bohužel poradit neumím. Můžu vám najít praktického lékaře nebo neurologa.";
+    expect(isEmergency(answer)).toBe(false);
+    expect(classify(answer, [])).toBe("out_of_scope");
   });
 });
 

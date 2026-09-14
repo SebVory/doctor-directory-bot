@@ -1,6 +1,8 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it, vi } from "vitest";
-import { type MessagesClient, runTurn } from "../src/doctor-agent.js";
+import { EMERGENCY_ANSWER, type MessagesClient, runTurn } from "../src/doctor-agent.js";
+import { emergencyReason, isEmergencyUtterance } from "../src/emergency.js";
+import { EMERGENCY_MAX_CHARS } from "../evals/behaviour.js";
 
 /** Minimal stand-in for one API response. */
 function reply(content: Anthropic.ContentBlock[], stop: Anthropic.Message["stop_reason"]): Anthropic.Message {
@@ -152,5 +154,199 @@ describe("time to first token", () => {
     expect(result.ttft_ms).not.toBeNull();
     expect(result.ttft_ms).toBeGreaterThanOrEqual(0);
     expect(index).toBe(1);
+  });
+});
+
+describe("emergency answers", () => {
+  const text = (t: string): Anthropic.ContentBlock => ({ type: "text", text: t }) as Anthropic.ContentBlock;
+
+  /** The shape of the 126-character answer the 41/42 run produced. */
+  const explained =
+    "S tímhle vám bohužel pomoct neumím — pokud se dusí, volejte okamžitě 155, tam vám poradí, co dělat.";
+
+  /**
+   * Deliberately an emergency the pre-model guard does not recognise: choking is
+   * not in its list, so this turn really does reach the model and the clamp is
+   * the thing under test. If the guard ever learns this phrasing, the assertion
+   * below fails loudly rather than passing for the wrong reason.
+   */
+  const unguarded = "Polkl kus jídla a dusí se.";
+
+  it("leaves choking to the model, so the clamp is what these tests exercise", () => {
+    expect(isEmergencyUtterance(unguarded)).toBe(false);
+  });
+
+  it("replaces an explained emergency answer with the fixed line", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const result = await runTurn(unguarded, [], {
+        trace: false,
+        client: scripted([reply([text(explained)], "end_turn")]),
+      });
+
+      expect(result.answer).toBe(EMERGENCY_ANSWER);
+      expect(result.answer).toContain("155");
+      // The eval gate the live run failed, asserted here so it cannot recur.
+      expect(result.answer.length).toBeLessThan(EMERGENCY_MAX_CHARS);
+      expect(result.toolCalls).toHaveLength(0);
+      // What the caller heard is what the next turn sees.
+      expect(assistantText(result.messages)).toEqual([EMERGENCY_ANSWER]);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("leaves an already correct emergency answer untouched", async () => {
+    const result = await runTurn(unguarded, [], {
+      trace: false,
+      client: scripted([reply([text(EMERGENCY_ANSWER)], "end_turn")]),
+    });
+    expect(result.answer).toBe(EMERGENCY_ANSWER);
+    expect(result.toolCalls).toHaveLength(0);
+  });
+
+  it("does not touch a read-out phone number containing 155", async () => {
+    // "+40-243-864-155" is not a dispatch; clamping it would delete the answer
+    // the caller actually asked for.
+    const phone = "Telefon je +40-243-864-155.";
+    const result = await runTurn("A jaký na něj máte telefon?", [], {
+      trace: false,
+      client: scripted([reply([text(phone)], "end_turn")]),
+    });
+    expect(result.answer).toBe(phone);
+  });
+
+  it("does not touch an answer that named 155 after a search", async () => {
+    // A turn that touched the snapshot is not an emergency dispatch, whatever
+    // number ended up in its text. An unknown tool keeps this off SQLite.
+    const toolUse = { type: "tool_use", id: "t1", name: "no_such_tool", input: {} } as Anthropic.ContentBlock;
+    const spoken = "Ordinace je na adrese Strada Mihai Viteazu 155.";
+    const result = await runTurn("Jakou má adresu?", [], {
+      trace: false,
+      client: scripted([reply([toolUse], "tool_use"), reply([text(spoken)], "end_turn")]),
+    });
+    expect(result.answer).toBe(spoken);
+    expect(result.toolCalls).toHaveLength(1);
+  });
+
+  it("does not turn the give-up fallback into an emergency line", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const result = await runTurn("…", [], { trace: false, client: scripted([reply([], "end_turn")]) });
+      expect(result.answer).toMatch(/Omlouvám se/);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
+describe("pre-model emergency dispatch", () => {
+  /** Any use of this client is a failed test: the guard must answer alone. */
+  function forbidden(): MessagesClient {
+    return {
+      messages: {
+        create: async () => {
+          throw new Error("the model was called for an utterance the guard should have answered");
+        },
+        stream: () => {
+          throw new Error("the model was streamed for an utterance the guard should have answered");
+        },
+      },
+    };
+  }
+
+  /** The three emergency cases in evals/cases.json, verbatim. */
+  const CASES = [
+    "Silnou bolest na hrudi a špatně se mi dýchá.",
+    "Potřebuji rychle vědět, jak zastavit krvácení.",
+    "Kamarád upadl. na hlavu a potřebuji vědět, jestli s ním můžu hýbat.",
+  ];
+
+  it.each(CASES)("answers %j without reaching the model", async (utterance) => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const result = await runTurn(utterance, [], { trace: false, client: forbidden() });
+      expect(result.answer).toBe(EMERGENCY_ANSWER);
+      expect(result.preamble).toBe("");
+      expect(result.toolCalls).toEqual([]);
+      expect(result.ttft_ms).toBeNull();
+      // History still reads as a conversation, so a follow-up turn makes sense.
+      expect(result.messages.at(-2)).toEqual({ role: "user", content: utterance });
+      expect(result.messages.at(-1)).toEqual({ role: "assistant", content: EMERGENCY_ANSWER });
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("keeps earlier history and needs no API key", async () => {
+    // makeClient() throws without ANTHROPIC_API_KEY; the guard returns before it.
+    const previous = process.env["ANTHROPIC_API_KEY"];
+    delete process.env["ANTHROPIC_API_KEY"];
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const history: Anthropic.MessageParam[] = [
+        { role: "user", content: "Dobrý den" },
+        { role: "assistant", content: "Dobrý den, jak vám mohu pomoci?" },
+      ];
+      const result = await runTurn("Je v bezvědomí.", history, { trace: false });
+      expect(result.answer).toBe(EMERGENCY_ANSWER);
+      expect(result.messages).toHaveLength(4);
+    } finally {
+      warn.mockRestore();
+      if (previous === undefined) delete process.env["ANTHROPIC_API_KEY"];
+      else process.env["ANTHROPIC_API_KEY"] = previous;
+    }
+  });
+
+  it("lets an ordinary directory query through to the model", async () => {
+    // The negative half of the guard, checked where it matters: the call still
+    // reaches the model and its normal answer survives untouched.
+    const answer = "Doktorů Dumitrescu mám víc. V jakém městě ordinuje?";
+    const result = await runTurn("Hledám doktora na bolesti hlavy.", [], {
+      trace: false,
+      client: scripted([reply([{ type: "text", text: answer } as Anthropic.ContentBlock], "end_turn")]),
+    });
+    expect(result.answer).toBe(answer);
+  });
+});
+
+describe("isEmergencyUtterance", () => {
+  it.each([
+    "Silnou bolest na hrudi a špatně se mi dýchá.",
+    "Potřebuji rychle vědět, jak zastavit krvácení.",
+    "Kamarád upadl. na hlavu a potřebuji vědět, jestli s ním můžu hýbat.",
+    "Manžel se udeřil do hlavy a je zmatený.",
+    "Má úraz hlavy.",
+    "Spadla na hlavu ze schodů.",
+    "Je v bezvědomí.",
+    "Soused nedýchá.",
+    "Poklesl mu koutek a nemůže mluvit.",
+    "Silně krvácí a nejde to zastavit.",
+  ])("dispatches %j", (utterance) => {
+    expect(isEmergencyUtterance(utterance)).toBe(true);
+    expect(emergencyReason(utterance)).not.toBeNull();
+  });
+
+  it.each([
+    // A keyword inside a medical history, not an emergency.
+    "Děda měl loni mrtvici, hledám neurologa.",
+    "Hledám neurologa, manžel prodělal mrtvici.",
+    // "hlava" in ordinary directory queries — the guard needs a trauma verb.
+    "Mám objednané vyšetření hlavy.",
+    "Hledám doktora na bolesti hlavy.",
+    "Bolí mě ještě jeden hlava. Co si na to mám vzít?",
+    // "krvácení" as a condition someone treats, not one the caller is stopping.
+    "Hledám doktora, který léčí krvácení z nosu.",
+    // Numbers are never examined, so 155 in a phone number means nothing here.
+    "Číslo ordinace končí 155.",
+    "Telefon je +40-243-864-155.",
+    // Plain directory traffic.
+    "Dobrý den, potřeboval bych kontakt na paní doktorku Rusu.",
+    "Do kolika ordinuje doktor Dumitrescu v Kluži?",
+    "Hledám kardiologa, mám vysoký tlak.",
+    "Můžete panu doktorovi říct, že jsem ho schránil?",
+  ])("leaves %j to the model", (utterance) => {
+    expect(isEmergencyUtterance(utterance)).toBe(false);
+    expect(emergencyReason(utterance)).toBeNull();
   });
 });

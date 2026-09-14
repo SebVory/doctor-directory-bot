@@ -12,6 +12,7 @@ const { DoctorSchema, loadSnapshot } = await import("../src/ingest.js");
 const { CONFIRM_THRESHOLD, DOMINANCE_TRIGGER, SUGGESTION_FLOOR, findDoctors, getDoctorContact } =
   await import("../src/doctor-store.js");
 const { normalize, similarityOfNormalized } = await import("../src/match.js");
+const { findDoctorsPayload } = await import("../src/doctor-agent.js");
 
 const rows = (JSON.parse(readFileSync("./data/data-sample.json", "utf8")) as unknown[]).map((r) =>
   DoctorSchema.parse(r),
@@ -195,6 +196,64 @@ describe("must_ask", () => {
 
   it("is clear when nothing was found", () => {
     expect(findDoctors({ surname: "Svoboda" }).must_ask).toBe(false);
+  });
+});
+
+describe("the contact id is a capability, not a label", () => {
+  /**
+   * get_doctor_contact returns a phone number for any valid id and cannot know
+   * whether the identity was settled. So the id must not reach the model while
+   * the store still says the match is ambiguous or unconfirmed — otherwise the
+   * only thing standing between a caller and a stranger's direct line is a
+   * sentence in the prompt.
+   */
+  it("withholds every id while the search is ambiguous", () => {
+    const ambiguous = findDoctors({ surname: "Dumitresku" });
+    expect(ambiguous.must_ask).toBe(true);
+    expect(ambiguous.matches.length).toBeGreaterThan(1);
+    // The store still knows the ids; the model does not get them.
+    expect(ambiguous.matches.every((m) => m.id.length > 0)).toBe(true);
+
+    const payload = findDoctorsPayload(ambiguous);
+    expect(payload.matches.length).toBe(ambiguous.matches.length);
+    expect(payload.matches.some((m) => m.id !== undefined)).toBe(false);
+  });
+
+  it("withholds every id while the name is unconfirmed", () => {
+    const unsure = findDoctors({ surname: "Nyštor" });
+    expect(unsure.needs_confirmation).toBe(true);
+    expect(findDoctorsPayload(unsure).matches.some((m) => m.id !== undefined)).toBe(false);
+  });
+
+  it("releases the id once exactly one confident match remains", () => {
+    const row = rows[0];
+    if (row === undefined) throw new Error("sample has no rows");
+    const resolved = findDoctors({
+      surname: row.last_name, first_name: row.first_name,
+      city: row.location, speciality: row.speciality,
+    });
+    if (resolved.candidates !== 1 || resolved.needs_confirmation || resolved.must_ask) return;
+
+    const payload = findDoctorsPayload(resolved);
+    expect(payload.matches[0]?.id).toBe(resolved.matches[0]?.id);
+  });
+
+  it("still gives the model everything it needs to ask a good question", () => {
+    const payload = findDoctorsPayload(findDoctors({ surname: "Dumitresku" }));
+    const first = payload.matches[0];
+    expect(first?.first_name).toBeTruthy();
+    expect(first?.last_name).toBeTruthy();
+    expect(first?.city).toBeTruthy();
+    expect(payload.best_question).not.toBeNull();
+    expect(payload.candidates).toBeGreaterThan(1);
+  });
+
+  it("never leaks contact details through the search payload", () => {
+    const payload = findDoctorsPayload(findDoctors({ surname: "Dumitresku" }));
+    const serialised = JSON.stringify(payload);
+    for (const field of ["phone", "address", "email", "availability"]) {
+      expect(serialised).not.toContain(field);
+    }
   });
 });
 

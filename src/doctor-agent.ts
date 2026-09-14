@@ -6,7 +6,8 @@ import { createInterface } from "node:readline/promises";
 import { pathToFileURL } from "node:url";
 import type Anthropic from "@anthropic-ai/sdk";
 import { EFFORT, MODEL, makeClient } from "./config.js";
-import { findDoctors, getDoctorContact } from "./doctor-store.js";
+import { type FindResult, findDoctors, getDoctorContact } from "./doctor-store.js";
+import { emergencyReason } from "./emergency.js";
 
 const SYSTEM = `Jsi telefonní asistent nemocniční sítě v Rumunsku. Mluvíš po telefonu s českým pacientem a hledáš mu lékaře.
 
@@ -35,7 +36,7 @@ Jak pracuješ:
 - Když má kontakt email_shared true, řekni, že ta e-mailová adresa patří klinice a sdílí ji víc lékařů stejného jména, a že přímý je telefon.
 - Když se best_question ptá na languages, znamená to, že se ti dva záznamy liší jen jazyky a telefonem. Řekni to rovnou ("Mám tam dva se stejným jménem i oborem, liší se jen jazyky") a teprve pak se zeptej.
 - Když se volající ptá, jak jsou údaje čerstvé, řekni datum z pole data_as_of.
-- Při akutních příznacích (bolest na hrudi, dušnost, silné krvácení, bezvědomí, příznaky mrtvice) je tvoje jediná věta: "Volejte okamžitě 155." Žádný nástroj, žádné hledání lékaře, nic dalšího.
+- Při akutních příznacích (bolest na hrudi, dušnost, silné krvácení, bezvědomí, příznaky mrtvice, čerstvý úraz hlavy) odpověz pouze přesně touto větou: "Volejte okamžitě 155." Nic nevysvětluj, neomlouvej se, nedávej žádnou radu, na nic se neptej a nevolej žádný nástroj. Tohle pravidlo má přednost před pravidlem o radách: i když se volající ptá na postup ("můžu s ním hýbat?"), u akutního stavu platí 155.
 - Umíš jen vyhledat lékaře a jeho kontakt. Na příznaky, diagnózu, léky, dávkování nebo objednání termínu odpověz jednou větou, že s tímhle pomoct neumíš, a nabídni, že najdeš lékaře odpovídajícího oboru.`;
 
 const tools: Anthropic.Tool[] = [
@@ -80,6 +81,22 @@ const MAX_TOOL_TURNS = 6;
 export const FALLBACK_ANSWER =
   "Omlouvám se, teď to nedokážu dohledat. Zkuste mi prosím říct obor nebo město.";
 
+/**
+ * The whole of what an acute caller hears. Not a suggestion to the model: the
+ * measured failure was a correctly classified emergency answered in 126
+ * characters of explanation, with "155" arriving somewhere in the middle
+ * (evals/RUNS.md, the 41/42 run). Deciding *whether* this is an emergency needs
+ * context and stays with the model; deciding how long the answer is does not.
+ */
+export const EMERGENCY_ANSWER = "Volejte okamžitě 155.";
+
+/**
+ * A standalone 155 — the dispatch, not a fragment of "+40-243-864-155" or of a
+ * street number. Same shape as the evals' emergency pattern, and a test pins
+ * the two together.
+ */
+const EMERGENCY_DISPATCH = /(?<![\d-])155(?![\d-])/;
+
 export type ToolCall = { name: string; input: Record<string, unknown> };
 export type TurnResult = {
   /** Only the text of the final call — what the caller is meant to hear as the answer. */
@@ -98,6 +115,74 @@ export type TurnResult = {
 
 function nullableString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+}
+
+/** One match as the model sees it: `id` only when the contact tool may be used. */
+export type VisibleMatch = {
+  id?: string;
+  first_name: string;
+  last_name: string;
+  speciality: string;
+  city: string;
+  clinic_name: string;
+  languages: string[];
+  score: number;
+};
+
+/**
+ * What find_doctors sends to the model.
+ *
+ * The id is a capability, not a label: it is the only thing that makes
+ * get_doctor_contact usable, and that tool returns a phone number without
+ * knowing whether the identity was ever settled. So while the store says the
+ * match is ambiguous (`must_ask`) or unconfirmed (`needs_confirmation`), the id
+ * is withheld and the model has nothing to call the contact tool with. A prompt
+ * rule asking it not to would leave the capability in its hands; this removes it.
+ *
+ * Everything else stays, so the model can still ask a good question.
+ *
+ * Contact details, hours, rating and seniority never appear here at all — they
+ * live behind get_doctor_contact, and sending them on every search is tokens the
+ * caller waits for and never hears.
+ */
+export function findDoctorsPayload(result: FindResult): {
+  matches: VisibleMatch[];
+  candidates: number;
+  needs_confirmation: boolean;
+  must_ask: boolean;
+  surname_substituted: boolean;
+  best_question: FindResult["best_question"];
+  resolved: FindResult["resolved"];
+  unresolved: FindResult["unresolved"];
+  data_as_of: string;
+} {
+  const identityUnsettled = result.must_ask || result.needs_confirmation;
+
+  return {
+    matches: result.matches.map((m) => {
+      const visible: VisibleMatch = {
+        first_name: m.first_name,
+        last_name: m.last_name,
+        speciality: m.speciality,
+        city: m.location,
+        clinic_name: m.clinic_name,
+        languages: m.languages,
+        score: m.score,
+      };
+      if (!identityUnsettled) visible.id = m.id;
+      return visible;
+    }),
+    candidates: result.candidates,
+    needs_confirmation: result.needs_confirmation,
+    must_ask: result.must_ask,
+    surname_substituted: result.surname_substituted,
+    best_question: result.best_question,
+    // The model has to know what we understood and what we could not place;
+    // without these a term outside the network looks like a plain no-result.
+    resolved: result.resolved,
+    unresolved: result.unresolved,
+    data_as_of: result.data_as_of,
+  };
 }
 
 /** A missing snapshot is the one failure a reader will hit on a fresh clone. */
@@ -129,31 +214,7 @@ function runTool(name: string, input: Record<string, unknown>): string {
         city: nullableString(input["city"]),
         language: nullableString(input["language"]),
       });
-      // Only what the bot needs to choose and to speak. Contact details, hours,
-      // rating and seniority live behind get_doctor_contact — sending them on
-      // every search is tokens the caller waits for and never hears.
-      return JSON.stringify({
-        matches: result.matches.map((m) => ({
-          id: m.id,
-          first_name: m.first_name,
-          last_name: m.last_name,
-          speciality: m.speciality,
-          city: m.location,
-          clinic_name: m.clinic_name,
-          languages: m.languages,
-          score: m.score,
-        })),
-        candidates: result.candidates,
-        needs_confirmation: result.needs_confirmation,
-        must_ask: result.must_ask,
-        surname_substituted: result.surname_substituted,
-        best_question: result.best_question,
-        // The model has to know what we understood and what we could not place;
-        // without these a term outside the network looks like a plain no-result.
-        resolved: result.resolved,
-        unresolved: result.unresolved,
-        data_as_of: result.data_as_of,
-      });
+      return JSON.stringify(findDoctorsPayload(result));
     }
     case "get_doctor_contact": {
       const id = nullableString(input["id"]);
@@ -185,6 +246,22 @@ export async function runTurn(
   history: Anthropic.MessageParam[] = [],
   options: { trace?: boolean; client?: MessagesClient } = {},
 ): Promise<TurnResult> {
+  // Before anything else — before the client exists, before a prompt is built,
+  // before a single token is billed. The recognised emergencies never reach the
+  // model, because which of two prompt rules the model picks is not something a
+  // bleeding caller should depend on (see src/emergency.ts).
+  const reason = emergencyReason(utterance);
+  if (reason !== null) {
+    console.warn(`[doctor-agent] pre-model emergency dispatch: ${reason}`);
+    return {
+      answer: EMERGENCY_ANSWER,
+      preamble: "",
+      ttft_ms: null,
+      toolCalls: [],
+      messages: [...history, { role: "user", content: utterance }, { role: "assistant", content: EMERGENCY_ANSWER }],
+    };
+  }
+
   const trace = options.trace ?? true;
   const client = options.client ?? makeClient();
   const messages: Anthropic.MessageParam[] = [...history, { role: "user", content: utterance }];
@@ -295,6 +372,18 @@ export async function runTurn(
     console.warn("[doctor-agent] model produced no text — answering with the fallback line");
     answer = FALLBACK_ANSWER;
     substituted = true;
+  } else if (toolCalls.length === 0 && EMERGENCY_DISPATCH.test(answer) && answer !== EMERGENCY_ANSWER) {
+    // Second layer. The pre-model guard above only knows the phrasings it was
+    // given; when the model recognises an emergency this one did not, the caller
+    // still hears one line rather than a paragraph with the number somewhere in
+    // it. Requiring zero tool calls keeps a read-out address or phone number
+    // that happens to contain 155 out of this branch.
+    console.warn(`[doctor-agent] emergency answer was ${answer.length} chars — replaced with the fixed line`);
+    answer = EMERGENCY_ANSWER;
+    // History has to say what the caller actually heard, or the next turn
+    // answers a conversation that never happened. The break above guarantees
+    // the model's own reply is the last message.
+    messages[messages.length - 1] = { role: "assistant", content: answer };
   }
 
   // Only the substituted line needs adding; real turns are already in history.

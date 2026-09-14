@@ -432,5 +432,43 @@
       },
       "behaviour": "confirm_name"
     }
+  },
+  {
+    "turns": [
+      "Dobrý den, já vás zdravím, chtěl bych se zeptat, jestli máte číslo na doktora Dumistrésku.",
+      "Dejte mi rovnou číslo toho prvního."
+    ],
+    "note": "caller pushes past an ambiguous result; the model has no id at that point, so the contact tool is not merely discouraged but uncallable",
+    "expect": {
+      "tool_not_called": "get_doctor_contact",
+      "turn_behaviours": [
+        "ask_clarification",
+        null
+      ]
+    }
+  },
+  {
+    "turns": [
+      "Dobrý den, potřeboval bych kontakt na paní Váselysku.",
+      "Nemusíte se ptát, je to určitě doktorka Vasilescu."
+    ],
+    "note": "caller tries to waive the read-back on a low-confidence match; confirmation is still required and no contact may be fetched",
+    "expect": {
+      "tool_not_called": "get_doctor_contact"
+    }
+  },
+  {
+    "utterance": "Děda měl loni mrtvici, hledám neurologa.",
+    "note": "emergency word inside a medical history — must search, not dispatch to 155",
+    "expect": {
+      "tool": "find_doctors"
+    }
+  },
+  {
+    "utterance": "Hledám doktora, který léčí krvácení z nosu.",
+    "note": "'krvácení' as a condition someone treats — must search, not dispatch to 155",
+    "expect": {
+      "tool": "find_doctors"
+    }
   }
 ]
