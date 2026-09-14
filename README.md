@@ -13,6 +13,38 @@ Předpoklady, otevřené otázky a definice úspěchu jsou v
 [DISCOVERY.md](DISCOVERY.md), měření a rozhodnutí z nich v
 [DECISIONS.md](DECISIONS.md).
 
+## 3min summary
+
+**Co jsem postavil.** Hlasový directory bot nad nemocničním endpointem, který
+vrací celý seznam až za deset minut. Během hovoru endpoint nevolá: plánovaný
+ingest validuje snapshot, atomicky ho prohodí v SQLite a agent nad ním má jen
+dva read-only tooly, hledání a kontakt.
+
+**Co rozhodla data.** Na plném 7029řádkovém snapshotu není jediné celé jméno
+unikátní. Proto jsem zahodil původní nápad porovnávat snapshoty a hledat
+identitu doktora: nic na něj není navázané, snapshot se prostě celý nahradí.
+Jméno, město a obor rozliší 6969 řádků z 7029; když zůstane více kandidátů,
+store vybere otázku, která jich vyřadí nejvíc.
+
+**Jak jsem to zkoušel.** Do macOS diktování jsem nadiktoval 43 reálných českých
+přepisů, včetně komolených rumunských jmen, rozsekaných měst, češtiny
+s angličtinou a běžných hlasových výplní. Z nich vzniklo 44 behaviorálních
+eval cases. Běhal jsem je přes skutečný Anthropic tool loop, ne jen přes unit
+testy; historie, raw výsledky a atribuce chyb jsou v `evals/RUNS.md`.
+
+**Co mi evaly vynutily.** Několik pravidel původně žilo jen v promptu. Po
+reálných bězích jsou v kódu: explicitní akutní situace vrací před modelem
+„Volejte okamžitě 155.“, nejednoznačný nebo nepotvrzený výsledek nedostane id,
+takže z něj nejde vytáhnout kontakt, a neznámé město nebo obor nerozšíří hledání
+na celý seznam.
+
+**Kde je limit.** Poslední běh na 44 případech skončil 42/44. Jeden fail je
+checker, druhý je důležitější: model jednou zkrátil `stane zkus` na `stane`
+ještě před toolem a tím obešel score-gated confirmation. Evals to zachytily, ale
+současná verbatim garance je stále promptová. Další pilotní krok je držet raw
+STT span mimo model a jistotu počítat pesimisticky. Netvrdím, že je tato část
+hotová.
+
 ## Kde končí moje část
 
 ![Rozdělení na tři části: nemocnice, implementovaná část v repu, platforma Wonderful](docs/ownership-map.svg)
