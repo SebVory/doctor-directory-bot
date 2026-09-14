@@ -74,7 +74,14 @@ export const FALLBACK_ANSWER =
 
 export type ToolCall = { name: string; input: Record<string, unknown> };
 export type TurnResult = {
+  /** Only the text of the final call — what the caller is meant to hear as the answer. */
   answer: string;
+  /**
+   * Filler the model emits alongside a tool call ("Moment, podívám se"). A voice
+   * runtime plays this while the search runs, which is where the perceived latency
+   * actually goes. It must never be glued onto the answer.
+   */
+  preamble: string;
   toolCalls: ToolCall[];
   messages: Anthropic.MessageParam[];
 };
@@ -110,6 +117,10 @@ function executeTool(name: string, input: Record<string, unknown>): string {
         candidates: result.candidates,
         needs_confirmation: result.needs_confirmation,
         best_question: result.best_question,
+        // The model has to know what we understood and what we could not place;
+        // without these a term outside the network looks like a plain no-result.
+        resolved: result.resolved,
+        unresolved: result.unresolved,
         data_as_of: result.data_as_of,
       });
     }
@@ -124,9 +135,17 @@ function executeTool(name: string, input: Record<string, unknown>): string {
 }
 
 /** Narrow slice of the SDK runTurn needs, so tests can drive the loop without a key. */
+/** Minimal stream surface: enough for time-to-first-token, easy to fake in tests. */
+type MessageStreamLike = {
+  on(event: "text", listener: (delta: string) => void): unknown;
+  finalMessage(): Promise<Anthropic.Message>;
+};
+
 export type MessagesClient = {
   messages: {
     create(params: Anthropic.MessageCreateParamsNonStreaming): Promise<Anthropic.Message>;
+    /** Optional so a test double can omit it and fall back to create(). */
+    stream?(params: Anthropic.MessageCreateParamsNonStreaming): MessageStreamLike;
   };
 };
 
@@ -139,12 +158,13 @@ export async function runTurn(
   const client = options.client ?? makeClient();
   const messages: Anthropic.MessageParam[] = [...history, { role: "user", content: utterance }];
   const toolCalls: ToolCall[] = [];
-  const said: string[] = [];
+  const preambleParts: string[] = [];
+  let finalText = "";
   let exhaustedTurns = true;
 
   for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
     const callStarted = performance.now();
-    const response = await client.messages.create({
+    const params: Anthropic.MessageCreateParamsNonStreaming = {
       model: MODEL,
       max_tokens: 2048,
       // Tools then system form a stable prefix on every turn of every call; the
@@ -153,7 +173,23 @@ export async function runTurn(
       output_config: { effort: EFFORT },
       tools,
       messages,
-    });
+    };
+
+    // Stream once tool results are in hand: that call produces the words the caller
+    // hears, so its time-to-first-token is the number that matters for voice. The
+    // tool-decision call is never spoken, so it stays non-streaming.
+    let ttftMs: number | null = null;
+    let response: Anthropic.Message;
+
+    if (turn > 0 && client.messages.stream !== undefined) {
+      const stream = client.messages.stream(params);
+      stream.on("text", () => {
+        ttftMs ??= Math.round(performance.now() - callStarted);
+      });
+      response = await stream.finalMessage();
+    } else {
+      response = await client.messages.create(params);
+    }
     const callMs = Math.round(performance.now() - callStarted);
 
     if (process.env["LOG_TIMING"] === "1") {
@@ -165,7 +201,7 @@ export async function runTurn(
         0,
       );
       console.error(
-        `      [timing] call ${turn + 1}: ${callMs} ms · in=${response.usage.input_tokens} out=${response.usage.output_tokens} · thinking=${(response.usage as unknown as { output_tokens_details?: { thinking_tokens?: number } }).output_tokens_details?.thinking_tokens ?? 0} tok`,
+        `      [timing] call ${turn + 1}: ${callMs} ms${ttftMs === null ? "" : ` (ttft ${ttftMs} ms)`} · in=${response.usage.input_tokens} out=${response.usage.output_tokens} · thinking=${(response.usage as unknown as { output_tokens_details?: { thinking_tokens?: number } }).output_tokens_details?.thinking_tokens ?? 0} tok`,
       );
     }
 
@@ -184,13 +220,21 @@ export async function runTurn(
     // message lands in history exactly once instead of being re-appended as text.
     messages.push({ role: "assistant", content: response.content });
 
-    for (const block of response.content) {
-      if (block.type === "text" && block.text.trim().length > 0) said.push(block.text.trim());
-    }
+    const text = response.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text.trim())
+      .filter((t) => t.length > 0)
+      .join(" ");
 
     if (response.stop_reason !== "tool_use") {
+      finalText = text;
       exhaustedTurns = false;
       break;
+    }
+
+    if (text.length > 0) {
+      preambleParts.push(text);
+      if (trace) console.log(`   💬 ${text}`);
     }
 
     const uses = response.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
@@ -208,7 +252,7 @@ export async function runTurn(
     messages.push({ role: "user", content: results });
   }
 
-  let answer = said.join(" ").trim();
+  let answer = finalText.trim();
   let substituted = false;
   if (exhaustedTurns) {
     console.warn(`[doctor-agent] hit MAX_TOOL_TURNS (${MAX_TOOL_TURNS}) — answering with the fallback line`);
@@ -223,7 +267,7 @@ export async function runTurn(
   // Only the substituted line needs adding; real turns are already in history.
   if (substituted) messages.push({ role: "assistant", content: answer });
 
-  return { answer, toolCalls, messages };
+  return { answer, preamble: preambleParts.join(" "), toolCalls, messages };
 }
 
 async function interactive(): Promise<void> {
