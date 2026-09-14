@@ -147,21 +147,23 @@ export const SPECIALITY_SYNONYMS: Readonly<Record<string, readonly string[]>> = 
 /** Czech exonyms -> the exact location string stored in the data. */
 export const CITY_SYNONYMS: Readonly<Record<string, readonly string[]>> = {
   Bucharest: ["bukurest", "bukuresti", "bukurestu"],
-  "Cluj-Napoca": ["kluz", "kluz napoca"],
-  Timisoara: ["temesvar", "temesvaru"],
-  Iasi: ["jasy", "jas", "jasi"],
+  // Forms below marked (přepis) are verbatim from the dictation transcripts.
+  "Cluj-Napoca": ["kluz", "kluz napoca", "kuzi", "kuze"],
+  Timisoara: ["temesvar", "temesvaru", "tam je svar", "temesvare"],
+  Iasi: ["jasy", "jas", "jasi", "jasech"],
   Constanta: ["konstanca", "konstanta", "konstance"],
   Brasov: ["brasove"],
   Sibiu: ["sibin", "sibini"],
-  Oradea: ["velky varadin", "varadin"],
+  Oradea: ["velky varadin", "varadin", "or oradei", "oradei"],
   "Targu Mures": ["novy sekel"],
+  Botosani: ["botosany", "botan siker"],
   Suceava: ["sucava", "sucave"],
   Galati: ["galac", "galace"],
   Craiova: ["krajova", "krajove"],
-  Ploiesti: ["plojest", "plojesti"],
+  Ploiesti: ["plojest", "plojesti", "ploj testi", "plojtesti"],
   "Alba Iulia": ["alba julie"],
   "Baia Mare": ["baja mare"],
-  "Satu Mare": [],
+  "Satu Mare": ["santumare", "satu mare", "santu mare"],
   "Sighetu Marmatiei": ["sighet", "siget"],
   "Ramnicu Valcea": ["ramniku valcea", "valcea"],
   "Drobeta-Turnu Severin": ["turnu severin", "severin"],
@@ -181,6 +183,14 @@ export const LANGUAGE_SYNONYMS: Readonly<Record<string, readonly string[]>> = {
 const FUZZY_FLOOR = 0.62;
 
 /**
+ * Cities get a lower bar and a space-insensitive comparison. Dictation splits
+ * town names where it likes — "ploj testi", "Santumare" — and unlike a surname a
+ * wrong city costs a turn, not a wrong doctor.
+ */
+const CITY_FUZZY_FLOOR = 0.55;
+const squash = (s: string): string => s.replace(/\s+/g, "");
+
+/**
  * Resolve a spoken term to an exact value present in the data: exact normalized hit
  * on a synonym or on the canonical value itself, else the best fuzzy match above a
  * floor, else null (caller decides whether to ask a clarifying question).
@@ -188,22 +198,25 @@ const FUZZY_FLOOR = 0.62;
 function resolve(
   input: string | undefined,
   table: Readonly<Record<string, readonly string[]>>,
+  options: { floor?: number; ignoreSpaces?: boolean } = {},
 ): string | null {
   if (input === undefined || input.trim().length === 0) return null;
-  const query = normalize(input);
+  const floor = options.floor ?? FUZZY_FLOOR;
+  const shape = options.ignoreSpaces === true ? squash : (v: string): string => v;
+  const query = shape(normalize(input));
 
   for (const [canonical, synonyms] of Object.entries(table)) {
-    if (normalize(canonical) === query) return canonical;
+    if (shape(normalize(canonical)) === query) return canonical;
     for (const synonym of synonyms) {
-      if (normalize(synonym) === query) return canonical;
+      if (shape(normalize(synonym)) === query) return canonical;
     }
   }
 
   let best: string | null = null;
-  let bestScore = FUZZY_FLOOR;
+  let bestScore = floor;
   for (const [canonical, synonyms] of Object.entries(table)) {
     for (const candidate of [canonical, ...synonyms]) {
-      const score = similarity(query, candidate);
+      const score = similarityOfNormalized(query, shape(normalize(candidate)));
       if (score > bestScore) {
         bestScore = score;
         best = canonical;
@@ -235,5 +248,5 @@ export function resolveCity(
   for (const location of knownLocations) {
     table[location] = CITY_SYNONYMS[location] ?? [];
   }
-  return resolve(input, table);
+  return resolve(input, table, { floor: CITY_FUZZY_FLOOR, ignoreSpaces: true });
 }

@@ -5,7 +5,10 @@
     "expect": {
       "tool": "find_doctors",
       "behaviour": "ask_clarification",
-      "tool_not_called": "get_doctor_contact"
+      "tool_not_called": "get_doctor_contact",
+      "args_include": {
+        "surname": "Dumistrésku"
+      }
     }
   },
   {
@@ -17,10 +20,14 @@
   },
   {
     "utterance": "Dobrý den, potřeboval bych kontakt na paní Váselysku.",
-    "note": "surname alone: the model often repairs Váselysku to Vasilescu before the call, so whether this confirms or asks varies — it must ask something and volunteer no contact",
+    "note": "surname passed verbatim, so 0.44 reaches the store and the read-back must fire — the case that proves the guard is alive",
     "expect": {
       "tool": "find_doctors",
-      "tool_not_called": "get_doctor_contact"
+      "tool_not_called": "get_doctor_contact",
+      "args_include": {
+        "surname": "Váselysku"
+      },
+      "behaviour": "confirm_name"
     }
   },
   {
@@ -96,7 +103,10 @@
         "Vasilescu"
       ],
       "tool_not_called": "get_doctor_contact",
-      "last_candidates": 1
+      "last_candidates": 1,
+      "args_include": {
+        "surname": "Vasilevsku"
+      }
     }
   },
   {
@@ -104,7 +114,10 @@
     "note": "0.50 inside 'paediatrician in Brasov' is evidence enough — ask which of the two, do not re-confirm",
     "expect": {
       "tool": "find_doctors",
-      "behaviour": "ask_clarification"
+      "behaviour": "ask_clarification",
+      "args_include": {
+        "surname": "čivu"
+      }
     }
   },
   {
@@ -149,7 +162,7 @@
       "tool": "find_doctors",
       "args_include": {
         "speciality": "gynekolog",
-        "city": "Ploješť"
+        "city": "ploj testi"
       }
     }
   },
@@ -302,7 +315,7 @@
     "expect": {
       "tool": "find_doctors",
       "args_include": {
-        "city": "Kluž"
+        "city": "Kůži"
       },
       "behaviour": "ask_clarification"
     }
@@ -315,6 +328,9 @@
       "tool_on_turn": {
         "tool": "get_doctor_contact",
         "turn": 1
+      },
+      "args_include": {
+        "city": "Santumare"
       }
     }
   },
@@ -374,6 +390,18 @@
         "ask_clarification",
         "ask_clarification"
       ]
+    }
+  },
+  {
+    "utterance": "Dobrý den, chtěl bych se zeptat, dokolika dnes ordinuje pan doktor Staneska, tady u nás, v Satu Mare?",
+    "note": "surname and city both verbatim from the transcript; the store resolves both",
+    "expect": {
+      "tool": "find_doctors",
+      "args_include": {
+        "surname": "Staneska",
+        "city": "Satu Mare"
+      },
+      "behaviour": "ask_clarification"
     }
   }
 ]

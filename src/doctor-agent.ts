@@ -12,6 +12,8 @@ const SYSTEM = `Jsi telefonní asistent nemocniční sítě v Rumunsku. Mluvíš
 
 Mluv vždy jen česky, včetně první věty, kterou řekneš před hledáním.
 
+Příjmení, křestní jméno a město předávej nástroji doslova tak, jak zazněly v přepisu, včetně chyb a zkomolenin. Nikdy je neopravuj ani nepřekládej — opravu a hledání podobných jmen dělá nástroj, který jediný vidí, jaká jména a města v datech opravdu jsou. Obor a jazyk předávej česky jako dosud.
+
 Jak mluvíš (je to telefon, ne chat):
 - Jedna až dvě krátké věty na odpověď. Žádné seznamy, žádné odrážky, žádné markdown, žádné emoji.
 - Rumunská jména čti tak, jak se píšou.
@@ -40,14 +42,14 @@ const tools: Anthropic.Tool[] = [
   {
     name: "find_doctors",
     description:
-      "Najde lékaře v místní kopii nemocničního seznamu. Všechny parametry jsou volitelné — nevyplněné pošli jako null. Příjmení smí být zkomolené, jak ho slyšel přepis řeči. Specializaci a město zadávej česky.",
+      "Najde lékaře v místní kopii nemocničního seznamu. Všechny parametry jsou volitelné — nevyplněné pošli jako null. Příjmení, křestní jméno a město předej doslova tak, jak zazněly v přepisu, včetně zkomolenin; neopravuj je. Obor a jazyk zadávej česky.",
     input_schema: {
       type: "object",
       properties: {
-        surname: { type: ["string", "null"], description: "Příjmení tak, jak zaznělo." },
-        first_name: { type: ["string", "null"], description: "Křestní jméno tak, jak zaznělo. Smí být skloněné." },
+        surname: { type: ["string", "null"], description: "Příjmení doslova tak, jak zaznělo v přepisu. Neopravuj ho." },
+        first_name: { type: ["string", "null"], description: "Křestní jméno doslova tak, jak zaznělo. Neopravuj ho." },
         speciality: { type: ["string", "null"], description: "Česky, např. kardiolog, dětský lékař." },
-        city: { type: ["string", "null"], description: "Česky, např. Kluž, Temešvár." },
+        city: { type: ["string", "null"], description: "Město doslova tak, jak zaznělo v přepisu, i když je zkomolené. Neopravuj ho." },
         language: { type: ["string", "null"], description: "Česky, např. anglicky, maďarsky." },
       },
       required: ["surname", "first_name", "speciality", "city", "language"],
