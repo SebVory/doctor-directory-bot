@@ -105,16 +105,20 @@
   },
   {
     "utterance": "Hledám doktora Vasilevsku, neurologa v Targoviste.",
-    "note": "everything given, exactly one match",
+    "note": "everything given, exactly one match; asserted on the search result because Czech declines the surname in the spoken answer",
     "expect": {
       "tool": "find_doctors",
       "answer_includes": [
-        "Vasilescu"
+        "Vasilesc"
       ],
       "tool_not_called": "get_doctor_contact",
-      "last_candidates": 1,
       "args_include": {
         "surname": "Vasilevsku"
+      },
+      "find_result_includes": {
+        "first_name": "Florin",
+        "last_name": "Vasilescu",
+        "candidates": 1
       }
     }
   },
@@ -139,18 +143,22 @@
   },
   {
     "utterance": "Dobrý den, potřeboval bych vědět, do kolika hodin je dnes doktor Drahomír. Gastro. enterolog. Jasi.",
-    "note": "name, speciality and city all split by full stops; resolves to one",
+    "note": "name, speciality and city all split by full stops; the conversation may search more than once, so the assertion looks for the successful search, not the last",
     "expect": {
       "tool": "find_doctors",
       "answer_includes": [
         "Dragomir"
       ],
-      "last_candidates": 1
+      "find_result_includes": {
+        "first_name": "Stefan",
+        "last_name": "Dragomir",
+        "candidates": 1
+      }
     }
   },
   {
     "utterance": "Dobrý den, potřebuji telefon na pana, doktora. Vlada Moldanová.",
-   "note": "Moldanová reaches Vlad Moldovan at 0.55; the given name does not lower the single 0.6 threshold, so read the surname back first",
+    "note": "Moldanová reaches Vlad Moldovan at 0.55; the given name does not lower the single 0.6 threshold, so read the surname back first",
     "expect": {
       "tool": "find_doctors",
       "behaviour": "confirm_name"

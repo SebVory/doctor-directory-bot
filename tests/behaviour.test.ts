@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { BEHAVIOUR_PATTERNS, classify, fold, mentionsDate, namesADoctor } from "../evals/behaviour.js";
+import {
+  BEHAVIOUR_PATTERNS,
+  classify,
+  findResultMatches,
+  fold,
+  mentionsDate,
+  namesADoctor,
+} from "../evals/behaviour.js";
 
 const notFound = (s: string): boolean => BEHAVIOUR_PATTERNS.not_found.test(fold(s));
 
@@ -131,5 +138,34 @@ describe("mentionsDate", () => {
     "V Kluži jich mám jedenáct a ordinují i v září.",
   ])("rejects %j", (answer) => {
     expect(mentionsDate(answer, snapshot)).toBe(false);
+  });
+});
+
+describe("findResultMatches", () => {
+  const found = (first: string, last: string, candidates: number) => ({
+    matches: [{ first_name: first, last_name: last }],
+    candidates,
+  });
+
+  it("matches on the top doctor and the candidate count", () => {
+    expect(findResultMatches(found("Florin", "Vasilescu", 1), { last_name: "Vasilescu", candidates: 1 })).toBe(true);
+    expect(findResultMatches(found("Florin", "Vasilescu", 1), { first_name: "Florin", last_name: "Vasilescu", candidates: 1 })).toBe(true);
+  });
+
+  it("rejects the right surname on the wrong person or count", () => {
+    expect(findResultMatches(found("Maria", "Vasilescu", 1), { first_name: "Florin", last_name: "Vasilescu" })).toBe(false);
+    expect(findResultMatches(found("Florin", "Vasilescu", 7), { last_name: "Vasilescu", candidates: 1 })).toBe(false);
+    expect(findResultMatches(found("Stefan", "Dragomir", 1), { last_name: "Vasilescu" })).toBe(false);
+  });
+
+  it("rejects an empty result", () => {
+    expect(findResultMatches({ matches: [], candidates: 0 }, { last_name: "Dragomir" })).toBe(false);
+    // The failure mode that started this: a later search returned nothing and
+    // clobbered the successful one, so order must not decide the verdict.
+    expect(findResultMatches({ matches: [], candidates: 0 }, { candidates: 1 })).toBe(false);
+  });
+
+  it("treats an empty spec as satisfied", () => {
+    expect(findResultMatches(found("Florin", "Vasilescu", 1), {})).toBe(true);
   });
 });

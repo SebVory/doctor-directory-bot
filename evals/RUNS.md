@@ -205,6 +205,78 @@ presenting a final pass rate.
 
 ---
 
+## 2026-09-14 — clean final run
+
+The first run after correcting two stale case expectations (`čivu`,
+`Vlada Moldanová`) and one checker false negative ("Znáte jeho křestní jméno?").
+No agent, matcher, store, prompt or checker change since.
+
+**Result.** 38/40 passed (95%, threshold 80%).
+
+```text
+conversation ms avg 8995, max 22819
+TTFT avg 1949 ms, max 6274 ms (33 streamed)
+
+emergency            3
+contact              6
+confirm_name         4
+ask_clarification   19
+not_found            6
+out_of_scope         1
+found                1
+other                0
+```
+
+**Checks the run was for.**
+
+- `args_include` failures: **none**. Every verbatim surname and city arrived at
+  the tool as the transcript wrote it.
+- `confirm_name`: **4**, nonzero.
+- `stane zkus` reached the read-back branch:
+  `✅ 5860 ms  Dobrý den, potřebuji, ee kardiologa, stane zkus. Tem   Slyšel jsem správně, že hledáte doktora Stanescu?`
+- The three failures from the previous run did not recur.
+
+**Two failures, raw text as printed.**
+
+```text
+❌    6970 ms  Hledám doktora Vasilevsku, neurologa v Targoviste.     V Targovişti mám neurologa, doktora Florina Vasilesc
+       ↳ answer missing "Vasilescu"
+
+❌   19555 ms  Dobrý den, potřeboval bych vědět, do kolika hodin je   V Iasi mám gastroenterologa doktora Stefana Dragomir
+       ↳ last_candidates: expected 1, the last search reported 0
+```
+
+Both are new; neither appeared in the 37/40 run. Not attributed here — the
+owner decides how to present the result before any case or checker is touched.
+What is observable without changing anything: the first answer names the right
+doctor with the surname declined ("Florina Vasilesc…"), and the second names the
+right doctor while the last search of that conversation reported no candidates,
+so the assertion looked at a different call than the one that produced the
+answer.
+
+**Follow-up, offline, no further billed run.** Both failures were reproduced
+against the store and are eval-assertion artifacts, not production behaviour.
+
+- *Vasilevsku.* The query returns exactly one doctor — `candidates=1`,
+  `Florin Vasilescu 0.817`. The answer named him correctly as "doktora Florina
+  Vasilesca"; `answer_includes: ["Vasilescu"]` is a substring check, and Czech
+  declension means the nominative never appears. Replaced with the stem
+  `"Vasilesc"` plus `find_result_includes: {first_name: "Florin", last_name:
+  "Vasilescu", candidates: 1}`.
+- *Dragomir.* `evals/run.ts` recorded `lastCandidates` inside a loop over every
+  call, so each `find_doctors` overwrote the previous one; a later search
+  returning nothing clobbered the successful lookup. Both plausible lookups
+  return `candidates=1, Stefan Dragomir` offline. `last_candidates` replaced with
+  `find_result_includes: {first_name: "Stefan", last_name: "Dragomir",
+  candidates: 1}`, which searches every result in the conversation rather than
+  trusting call order.
+
+Only assertions and the runner's bookkeeping changed — no agent, store, matcher,
+prompt or threshold change. **The 38/40 above stands as the last measured
+result; no billed rerun has been performed since the correction.**
+
+---
+
 ## Next run
 
 The three case fixes above are unmeasured. The open question is whether

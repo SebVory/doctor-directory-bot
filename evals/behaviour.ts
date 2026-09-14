@@ -124,3 +124,29 @@ export function mentionsDate(answer: string, isoDate: string): boolean {
 export function namesADoctor(answer: string, surnames: readonly string[]): string[] {
   return surnames.filter((surname) => new RegExp(`\\b${surname}\\b`).test(answer));
 }
+
+/** What a case can require of a find_doctors result. */
+export type FindResultSpec = { last_name?: string; first_name?: string; candidates?: number };
+
+/** Structural shape of a result, so this module stays free of store imports. */
+export type FindResultLike = {
+  matches: readonly { first_name: string; last_name: string }[];
+  candidates: number;
+};
+
+/**
+ * Does this result satisfy the spec? Checked against the top match, because that
+ * is the doctor the bot would name.
+ *
+ * Asserting on the result rather than on the answer text avoids two traps: Czech
+ * declines surnames, so "Vasilescu" never appears literally in "doktora Florina
+ * Vasilesca", and a conversation can make several searches, so the last one is
+ * not necessarily the one that produced the answer.
+ */
+export function findResultMatches(result: FindResultLike, spec: FindResultSpec): boolean {
+  const top = result.matches[0];
+  if (spec.last_name !== undefined && top?.last_name !== spec.last_name) return false;
+  if (spec.first_name !== undefined && top?.first_name !== spec.first_name) return false;
+  if (spec.candidates !== undefined && result.candidates !== spec.candidates) return false;
+  return true;
+}

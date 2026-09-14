@@ -12,6 +12,8 @@ import { findDoctors } from "../src/doctor-store.js";
 const str = (v: unknown): string | undefined => (typeof v === "string" && v.trim().length > 0 ? v : undefined);
 import {
   BEHAVIOUR_PATTERNS,
+  type FindResultSpec,
+  findResultMatches,
   mentionsDate,
   namesADoctor,
   type Behaviour,
@@ -48,6 +50,12 @@ type Case = {
     last_candidates?: number;
     /** What the last find_doctors resolved the spoken terms to. */
     resolved_includes?: { speciality?: string; city?: string; language?: string };
+    /**
+     * At least one find_doctors call anywhere in the conversation returned this.
+     * Order-independent, unlike last_candidates, and immune to Czech declension,
+     * unlike answer_includes.
+     */
+    find_result_includes?: FindResultSpec;
     args_include?: Record<string, string | null>;
     answer_includes?: string[];
     /** Answer must quote the snapshot date, ISO or Czech "D. M. YYYY". */
@@ -82,6 +90,7 @@ function checkCase(
   turnTools: string[][],
   lastCandidates: number | null,
   lastResolved: { speciality: string | null; city: string | null; language: string | null } | null,
+  findResults: readonly { matches: readonly { first_name: string; last_name: string }[]; candidates: number }[],
 ): string[] {
   const failures: string[] = [];
   const {
@@ -95,7 +104,20 @@ function checkCase(
     tool_on_turn,
     last_candidates,
     resolved_includes,
+    find_result_includes,
   } = testCase.expect;
+
+  if (find_result_includes !== undefined) {
+    const matched = findResults.some((r) => findResultMatches(r, find_result_includes));
+    if (!matched) {
+      const seen = findResults
+        .map((r) => `${r.matches[0] ? `${r.matches[0].first_name} ${r.matches[0].last_name}` : "none"}/${r.candidates}`)
+        .join(", ");
+      failures.push(
+        `find_result_includes: no search returned ${JSON.stringify(find_result_includes)} (searches returned: ${seen || "nothing"})`,
+      );
+    }
+  }
 
   if (resolved_includes !== undefined) {
     if (lastResolved === null) failures.push("resolved_includes: find_doctors never returned a result");
@@ -292,6 +314,7 @@ for (const [index, testCase] of runnable.entries()) {
     const turnTools: string[][] = [];
     let lastCandidates: number | null = null;
     let lastResolved: { speciality: string | null; city: string | null; language: string | null } | null = null;
+    const findResults: { matches: { first_name: string; last_name: string }[]; candidates: number }[] = [];
     // Accumulated across the whole conversation, so tool_not_called means
     // "never called on this call", not "not on the last turn".
     const toolCalls: { name: string; input: Record<string, unknown> }[] = [];
@@ -312,6 +335,7 @@ for (const [index, testCase] of runnable.entries()) {
         });
         lastCandidates = found.candidates;
         lastResolved = found.resolved;
+        findResults.push({ matches: found.matches, candidates: found.candidates });
       }
       toolCalls.push(...result.toolCalls);
     }
@@ -322,7 +346,7 @@ for (const [index, testCase] of runnable.entries()) {
       ttft,
       ms: Math.round(performance.now() - started),
       outcome: classify(answer, (turnTools.at(-1) ?? []).map((name) => ({ name }))),
-      failures: checkCase(testCase, answer, toolCalls, turnAnswers, turnTools, lastCandidates, lastResolved),
+      failures: checkCase(testCase, answer, toolCalls, turnAnswers, turnTools, lastCandidates, lastResolved, findResults),
     });
   } catch (error) {
     results.push({

@@ -352,14 +352,17 @@ because the model pre-corrected, and with the raw transcript "stane zkus" reache
 Stanescu at 0.579 and would have been read out as fact. One bar, 0.6, whatever
 else the caller gave.
 
-**First post-change API run.** The 40-case run produced 37/40 and
-`confirm_name: 4`; `stane zkus` reached the read-back branch as intended. The two
-low-confidence failures (`čivu` at 0.50 and `Moldanová` at 0.55) were stale
-expectations left from the old narrowed-threshold behaviour. The third failure
-was a checker false negative: “Znáte jeho křestní jméno?” is a valid clarification
-question, but the pattern did not recognise it. The cases and checker were
-corrected without changing agent or store behaviour. A clean post-correction run
-is still required before publishing a final pass rate.
+**Measured.** The latest billed run scored **38/40**. No case failed on an
+`args_include` mismatch, so the model passes surnames and cities through
+verbatim. `confirm_name` was **4**, and `stane zkus` reached the read-back
+branch — the guard that had been dead at 0 is alive.
+
+Its two failures were reproduced offline and are eval-assertion artifacts, not
+behaviour: one compared a surname literally while Czech declined it in the spoken
+answer, and one inspected the last search of a conversation rather than the
+search that produced the answer. Both assertions were replaced with a check on
+the search result itself. **No billed rerun has been performed since that
+correction, so 38/40 remains the measured figure.**
 
 **The general lesson, which is the point of this entry.** An upstream component
 silently improving its input can disable a downstream safety check, and every

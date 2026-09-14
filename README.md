@@ -165,12 +165,13 @@ když do storu chodila jména už opravená a skóre se pohybovala u jedničky. 
 doslovným přepisem projde „stane zkus" na 0,579 a bez potvrzení by se přečetlo
 jako fakt. Práh je teď jeden, 0,6, ať volající řekl cokoli dalšího.
 
-**První ověření proti API proběhlo, čistý závěrečný běh ještě čeká.** První běh
-nad novým návrhem měl 40 případů a aktivoval `confirm_name` čtyřikrát, včetně
-„stane zkus“. Tři červené případy nebyly chyba doslovného předávání ani matcheru:
-`čivu` a `Moldanová` měly staré očekávání z doby prahu 0,45 a jeden checker neuměl
-poznat legitimní otázku na křestní jméno. Tyto eval artefakty jsou opravené a další
-běh bude čistý výsledek pro [evals/RUNS.md](evals/RUNS.md).
+**Poslední placený běh: 38/40 (95 %).** Ani jedna kontrola doslovného předání
+argumentů do toolu neselhala.
+
+**Důležitější signál než skóre:** `confirm_name` bylo 4 a „stane zkus“ skončilo
+potvrzovací větví. Dva zbývající faily byly offline reprodukované jako artefakty
+eval assertionů a opravené bez změny agenta nebo matcheru; po této opravě už
+nový placený běh neproběhl.
 
 Čtyři věci, které živý běh vynutil dřív. Bot potvrzoval jména, která vůbec
 nenašel — pacientovi, který řekl Popescu, nabídl Dumitrescu na 0,31; pod 0,40
@@ -227,6 +228,11 @@ Plný snapshot ze zadání není v repu; committed je vzorek 500 řádků
 (`data/data-sample.json`), na kterém běží všechno včetně testů. Pokud plný
 snapshot v `data/full-snapshot/` chybí, `npm run mock-api` se na vzorek přepne
 sám a napíše to.
+
+Plný snapshot ze zadání zůstává lokální a je v `.gitignore`. V repu je jen
+stratifikovaný 500řádkový vzorek, aby šel projekt naklonovat, spustit a otestovat
+bez dalšího souboru. Čísla v `DECISIONS.md` označená jako měřená nad plným
+snapshotem jsou výsledky nad interview fixture, ne nad commitnutým vzorkem.
 
 Pořadí prvního spuštění — `ingest` potřebuje běžící `mock-api`, `doctor`
 a `evals` potřebují naplněnou databázi:
