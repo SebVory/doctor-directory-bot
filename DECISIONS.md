@@ -103,7 +103,9 @@ overlap already resolved **every one** to the right surname. What it did not do
 was score them confidently: mean **0.837**, and **24 of 78** landed under 0.8.
 `Rusuová` against `Rusu` scored 0.721.
 
-**Decided.** Strip the suffix — mean goes to **1.000**, nothing under 0.8. This
+**Decided.** Strip the suffix on the *query* side only — mean goes to **1.000**,
+nothing under 0.8. (Measured before the data side reverted to plain `normalize`;
+the stored column keeps the surname as written, the caller's words get stripped.) This
 matters because the confirm-the-name branch is score-gated: the bot was asking
 "did I hear you right?" about names it had heard perfectly.
 
@@ -121,7 +123,7 @@ used for surnames only, with a test asserting `normalize("Craiova")` is untouche
 0.765, Ijakob→Iacob 0.857, Rusů→Rusu 1.000, Stánová→Stan 0.721, Jonesku→Ionescu
 0.800. All five resolve, worst 0.72.
 
-**Separately.** `Ilije` against `Ilie` scored **0.000** — no shared trigram. This
+**Separately (before the `ije`/`ija` rules).** `Ilije` against `Ilie` scored **0.000** — no shared trigram. This
 looked like a hard limit of trigrams on four-letter surnames. It was not: the
 table had no rule for the glide a Czech ear inserts. Adding `["ije","je"]` and
 `["ija","ja"]` took it to **1.000**, and `Dijakonu`→`Diaconu` from 0.727 to 1.000,
@@ -198,14 +200,17 @@ purpose.
 
 **Decided.** Once any candidate reaches 0.95, drop everything under 0.85. 565
 becomes **277**. Below that trigger the wide net stays, because `Nyštor` must
-still reach `Nistor` at 0.50.
+still reach `Nistor` at 0.50. Two later additions sit on top: nothing under 0.40
+is offered at all, and a surname the caller said that is a *real* surname in the
+data must never be silently replaced by a different real one.
 
 **Second decision.** Reading out three arbitrary names from hundreds is not an
 answer. The store computes which single question splits the remaining candidates
 best — smallest worst-case bucket — and returns it with its options. Asking which
-city removes **544 of 565**. Surname is checked first and outside that metric: a
-metric rewarding many distinct values would hand the question to city (42 values)
-every time, when "Dumitrescu, or Dumitru?" is plainly the first thing to ask.
+city removes **544 of 565**. Surname is checked first and outside that metric — but only when the caller
+actually said a surname: a metric rewarding many distinct values would hand the
+question to city (42 values) every time, while asking "Dumitrescu, or Dumitru?"
+of someone who only named a town is a question they cannot answer.
 
 ---
 

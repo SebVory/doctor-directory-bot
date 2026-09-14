@@ -66,6 +66,8 @@ Commit messages carry the same reasoning for the change they ship.
 - Dependencies are deliberately few: `@anthropic-ai/sdk`, `better-sqlite3`, `zod`,
   `dotenv`, plus `tsx`/`typescript`/`vitest` for development.
 - `npm test` and `npm run typecheck` are free and offline. Use them by default.
+- Every billed eval run goes in `evals/RUNS.md` with its score, its failures and
+  what each failure was caused by, so the same question is never paid for twice.
 - **`npm run evals` and `npm run doctor` bill a real Anthropic API key. Never run
   them without asking first, every time.** State how many calls a run will make
   before asking — a benchmark of "3 models x 3 runs x 3 cases" is ~70 billed calls,

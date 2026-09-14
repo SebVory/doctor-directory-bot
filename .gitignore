@@ -6,6 +6,3 @@ db/
 data/full-snapshot/
 WALKTHROUGH.md
 
-# Drafts, deliberately untracked until reworded — remove these two lines to commit them
-README.md
-DISCOVERY.md
