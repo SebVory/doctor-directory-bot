@@ -1,7 +1,7 @@
 # discovery - poznamky
 
 Inzenyrsky discovery log k tomuhle cviceni: co jsem o zadani zjistil, co jsem si
-domyslel a co zustalo otevrene. Zmerena rozhodnuti a historie bezu jsou jinde –
+domyslel a co zustalo otevrene. Zmerena rozhodnuti a historie bezu jsou jinde,
 v [DECISIONS.md](DECISIONS.md) a [evals/RUNS.md](evals/RUNS.md).
 
 Nic z toho neni overene s nemocnici, je to jak jsem zadani pochopil ja. Kde jsem
@@ -18,10 +18,13 @@ si neco domyslel, je to napsane jako predpoklad.
 - jina cesta k aktualnim datum neni. Ptal jsem se na integraci opacnym smerem
   (edit/create na nase REST API pri zmene), odpoved byla, ze nic dalsiho na strane
   nemocnice nevznikne. Tohle je vsechno, co dostaneme.
+- nabidl jsem i CRUD nebo male UI, kde by si nemocnice doktory editovala sama,
+  treba primo v nasi appce, ale delat by to nechteli, tak jsem to zkratoval
 - LLM ma do dat jen cist, zadne zapisy
 - cerstvost dat: predpokladame jednou denne
 - chybovost: zadne konkretni cislo, "nejaka standardni, na ktere se domluvime"
-- predpokladam, ze pred botem neni IVR automat a linka slouzi jen na tohle
+- ptal jsem se, jestli linka slouzi cele nemocnici a jestli je pred botem IVR - odpoved:
+  predpokladejme, ze neni, linka je jen na tohle
 - zadani resilo hledani podle prijmeni. Obor + mesto + jazyk jsem pridal az potom,
   prislo mi to jako prvni vec, kterou realny pacient rekne, kdyz jmeno nezna.
 - snapshot ~7000 zaznamu, ~3 MB
@@ -33,8 +36,8 @@ jiny telefon), kdyz data nemaji zadne id. Sel jsem pres porovnavani kombinace
 jmeno + email + telefon az k vektorove databazi, kterou jsem sam zavrhl jako
 drahou na provoz.
 
-**Ten problem ale vubec nemam.** Na doktory se nic nevaze – zadne rezervace, zadna
-historie – takze snapshot se cely prepise a identita se neresi. Otazka, ktera to
+Ten problem ale vubec nemam. Na doktory se nic nevaze, zadne rezervace, zadna
+historie, takze snapshot se cely prepise a identita se neresi. Otazka, ktera to
 rozhodne, je jedina: *vaze se na doktora nejaky nas vlastni stav?* Dokud je
 odpoved ne, je stabilni id zbytecna prace. Kdyby prislo "a objednejte me", meni to
 cely navrh: vznika stav navazany na konkretniho doktora a identita je najednou
@@ -76,8 +79,13 @@ narazim v navrhu.
 
 - uspech = pacient dostane spravneho doktora nebo spravny kontakt bez predani
   cloveku, a bot pritom nerekne nic, co v datech neni
-- containment - podil hovoru vyrizenych bez predani; odhad na start 50-60 %, je to
-  uzky use case
+- kdyz je kandidatu vic (padesat Novaku), bot se nema ptat na to, co maji vsichni
+  stejne, ale na to, co jich vyradi nejvic: mesto, obor, jmeno. Tohle jsem rikal uz
+  na callu, v kodu je to best_question
+- cil je, aby 95 % hovoru proslo rovnou. Zbytek (prejmenovani, dvojice se stejnym
+  jmenem, divne prepisy) se ladi az z pilotu a shadow modu, ne dopredu
+- containment - podil hovoru vyrizenych bez predani; odhad na start 50-60 %, cil je
+  tech 95 %, je to uzky use case
 - spravnost - podil vyrizenych hovoru, kde byl doktor opravdu ten spravny. Pro me
   dulezitejsi nez containment: spatny telefon je horsi nez prepojeni. Merit vzorkem
   hovoru do review queue kazdy tyden.
