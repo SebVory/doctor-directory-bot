@@ -225,6 +225,79 @@ describe("findDoctors", () => {
   });
 });
 
+describe("shared e-mail addresses", () => {
+  /** Two doctors with the same name at the same clinic derive the same address. */
+  function sharedEmailPair(): { email: string; ids: string[] } | null {
+    const byEmail = new Map<string, string[]>();
+    for (const row of rows) {
+      const key = row.email;
+      byEmail.set(key, [...(byEmail.get(key) ?? []), `${row.first_name} ${row.last_name}`]);
+    }
+    for (const [email, who] of byEmail) if (who.length > 1) return { email, ids: who };
+    return null;
+  }
+
+  it("flags an e-mail that more than one doctor answers", () => {
+    const pair = sharedEmailPair();
+    expect(pair).not.toBeNull();
+    if (pair === null) return;
+
+    // Find the matching rows through the store and check both report the flag.
+    const [name] = pair.ids;
+    const surname = name?.split(" ")[1] ?? "";
+    const found = findDoctors({ surname, limit: 50 }).matches.filter((m) =>
+      getDoctorContact(m.id)?.email === pair.email,
+    );
+    expect(found.length).toBeGreaterThan(0);
+    for (const match of found) {
+      const contact = getDoctorContact(match.id);
+      expect(contact?.email_shared).toBe(true);
+      expect(contact?.phone).toMatch(/^\+40-/);
+    }
+  });
+
+  it("does not flag an e-mail only one doctor answers", () => {
+    const counts = new Map<string, number>();
+    for (const row of rows) counts.set(row.email, (counts.get(row.email) ?? 0) + 1);
+    const soleEmail = [...counts.entries()].find(([, n]) => n === 1)?.[0];
+    expect(soleEmail).toBeDefined();
+
+    const row = rows.find((r) => r.email === soleEmail);
+    expect(row).toBeDefined();
+    if (row === undefined) return;
+    const match = findDoctors({ surname: row.last_name, first_name: row.first_name, limit: 50 }).matches.find(
+      (m) => getDoctorContact(m.id)?.email === soleEmail,
+    );
+    expect(match).toBeDefined();
+    if (match === undefined) return;
+    expect(getDoctorContact(match.id)?.email_shared).toBe(false);
+  });
+});
+
+describe("irreducible pairs", () => {
+  it("falls back to languages when name, city and speciality all match", () => {
+    // 30 such pairs in the full snapshot: same person-name, same town, same
+    // speciality, differing only in phone, address, languages and rating.
+    const groups = new Map<string, typeof rows>();
+    for (const row of rows) {
+      const key = [row.first_name, row.last_name, row.location, row.speciality].join("|");
+      groups.set(key, [...(groups.get(key) ?? []), row]);
+    }
+    const pair = [...groups.values()].find((g) => g.length > 1);
+    if (pair === undefined) return; // the 500-row sample may not carry one
+
+    const [first] = pair;
+    if (first === undefined) return;
+    const result = findDoctors({
+      surname: first.last_name,
+      first_name: first.first_name,
+      city: first.location,
+      speciality: first.speciality,
+    });
+    expect(result.best_question?.attribute).toBe("languages");
+  });
+});
+
 describe("snapshot cache", () => {
   it("follows a re-ingest inside the same process", () => {
     const dbPath = process.env["DOCTORS_DB"] ?? "";

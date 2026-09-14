@@ -6,7 +6,6 @@ function candidate(over: Partial<CandidateAttributes> = {}): CandidateAttributes
     last_name: "Novák",
     location: "Praha",
     speciality: "Cardiology",
-    clinic_name: "Klinika A",
     first_name: "Jan",
     languages: ["Czech"],
     ...over,
@@ -57,17 +56,12 @@ describe("bestQuestion", () => {
     expect(question?.options.every((o) => o.count === 10)).toBe(true);
   });
 
-  it("asks about the clinic when that is the only thing that differs", () => {
-    const question = bestQuestion([
-      candidate({ clinic_name: "Klinika A" }),
-      candidate({ clinic_name: "Klinika B" }),
-    ]);
-
-    expect(question?.attribute).toBe("clinic_name");
-    expect(question?.options).toEqual([
-      { value: "Klinika A", count: 1 },
-      { value: "Klinika B", count: 1 },
-    ]);
+  it("never asks which clinic — it is a bijection with the city in this data", () => {
+    // 42 clinics, 42 cities, "Clinica {city} Care". Asking the clinic adds nothing
+    // over asking the city and uses a word no caller would say.
+    const question = bestQuestion([candidate({ location: "Praha" }), candidate({ location: "Brno" })]);
+    expect(question?.attribute).toBe("city");
+    expect(question?.attribute).not.toBe("clinic_name");
   });
 
   it("never asks about an attribute every candidate shares", () => {

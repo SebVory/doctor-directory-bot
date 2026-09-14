@@ -40,7 +40,11 @@ export type DoctorMatch = {
 };
 
 /** Attributes the bot can disambiguate on, in tie-break order. */
-const QUESTION_ATTRIBUTES = ["city", "speciality", "clinic_name", "first_name", "languages"] as const;
+// clinic_name is deliberately absent: in this data the 42 clinics are a
+// bijection with the 42 cities ("Clinica {city} Care"), so asking which clinic
+// asks which city in words no caller would use. It stays in the tool payload
+// because the bot still says it out loud once one doctor remains.
+const QUESTION_ATTRIBUTES = ["city", "speciality", "first_name", "languages"] as const;
 export type QuestionAttribute = (typeof QUESTION_ATTRIBUTES)[number] | "last_name";
 
 export type BestQuestion = {
@@ -55,7 +59,6 @@ export type CandidateAttributes = {
   last_name: string;
   location: string;
   speciality: string;
-  clinic_name: string;
   first_name: string;
   languages: string[];
 };
@@ -68,8 +71,6 @@ function valuesOf(attribute: QuestionAttribute, candidate: CandidateAttributes):
       return [candidate.location];
     case "speciality":
       return [candidate.speciality];
-    case "clinic_name":
-      return [candidate.clinic_name];
     case "first_name":
       return [candidate.first_name];
     case "languages":
@@ -165,6 +166,12 @@ export type DoctorContact = {
   phone: string;
   address: string;
   email: string;
+  /**
+   * The e-mail is derived from name + clinic, so two different doctors who share
+   * both share an inbox — 616 pairs in the full snapshot. Reading it out as
+   * personal would send the caller to the wrong person; the phone is unique.
+   */
+  email_shared: boolean;
   location: string;
   availability: string;
 };
@@ -310,7 +317,6 @@ export function findDoctors(query: FindQuery): FindResult {
       last_name: row.last_name,
       location: row.location,
       speciality: row.speciality,
-      clinic_name: row.clinic_name,
       first_name: row.first_name,
       languages: JSON.parse(row.languages_json) as string[],
     }));
@@ -337,6 +343,11 @@ export function getDoctorContact(id: string): DoctorContact | null {
     | undefined;
 
   if (row === undefined) return null;
+
+  const sharing = db.prepare("SELECT count(*) AS n FROM doctors WHERE email = ?").get(row.email) as {
+    n: number;
+  };
+
   const { first_name, last_name, ...rest } = row;
-  return { ...rest, full_name: `${first_name} ${last_name}` };
+  return { ...rest, full_name: `${first_name} ${last_name}`, email_shared: sharing.n > 1 };
 }

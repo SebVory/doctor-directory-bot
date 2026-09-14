@@ -1,0 +1,221 @@
+# Realne STT prepisy (macOS diktovani, cestina). Radek = co STT napsalo, beze zmeny.
+# => cil (kdo/co byl minen) | ocekavany PRVNI tah bota
+# Pozor: kazde prijmeni ma v datech ~270 radku, takze "jen prijmeni" nikdy nekonci nalezenim,
+# vzdy doptanim. Kontakt/hodiny se ctou az po zuzeni na jednoho.
+
+Dobrý den, já vás zdravím, chtěl bych se zeptat, jestli máte číslo na doktora Dumistrésku.
+=> Dumitrescu, telefon | ask_clarification (město), kontakt až po zúžení
+
+Dobrý den, kolika dnes má pan doktor Vlad dobre? Já ještě právě musím vyzvednout děti ze školky, tak jestli to stihnu.
+=> Dobre Vlad, hodiny | jméno + příjmení zužuje; 1 → hodiny, víc → ask_clarification
+
+Dobrý den, já bych se chtěl zeptat, do kolika má restaurace Elena Dobryová?
+=> Dobre Elena, hodiny | STT "restaurace" místo "doktorka"; hledat i tak; 1 → hodiny, víc → ask
+
+Dobrý den, mohli byste mi nadiktovat e-mail na paní doktorku Klaudii Matějovou?
+=> Matei Claudia, e-mail | 1 → e-mail, víc → ask_clarification
+
+Dobrý den, potřeboval bych kontakt na paní Váselysku.
+=> Vasilescu (žena), kontakt | ask_clarification (město); STT i/y
+
+Dobrý den, dokolika má doktorka, ee, Georgievska? Co dělá v pediatrii?
+=> Georgescu, Pediatrics, hodiny | obor zužuje; víc → ask (město), 1 → hodiny
+
+The B then, potřeboval bych číslo na paní Nagyovou, paní doktorku, a tady je z Budáov.
+=> Neagu, telefon, město Budáov nerozpoznané | říct, že Budáov v síti není, doptat město; anglický balast ignorovat
+
+Dobrý den, chtěl jsem se zeptat, dokolika má paní doktorka na pulmonologii, paní doktorku z Tanců by chtěla?
+=> Stancu, Pulmonology, hodiny | obor zužuje; víc → ask (město), 1 → hodiny; STT ztratilo S
+
+Dobrý den, the volal sem se do nemocnice. Do Prahy 4.
+=> nikdo | Praha není v síti, říct to a zeptat se, co potřebuje; bez toolu nebo unresolved city
+
+Hello, hello, Slishy Messer.
+=> nikdo, kontrola spojení | "Slyším vás, jak vám můžu pomoct?", bez toolu, česky
+
+Dobrý den, je tam pan doktor Bob Hordyska, potřeboval bych s ním mluvit.
+=> nikdo, takové příjmení v datech není | not_found, doptat obor nebo město; nikdy nenabídnout podobné jméno jako fakt
+
+Dobrý den, nemůžu se dovolat paní doktorce Rusové a potřeboval bych na ní číslo, aktuální.
+=> Rusu (žena), telefon | ask_clarification (město); -ové strip
+
+Já vás zdravím, ee, chtěl bych. Vlastně se zeptat, na. Kontakt, na pana doktora. Diakonu.
+=> Diaconu, kontakt | ask_clarification (město), kontakt až po zúžení; jméno rozsekané tečkami
+
+Dobrý den, chtěl bych se zeptat, dokolika dnes ordinuje pan doktor Staneska, tady u nás, v Satu Mare?
+=> Stanescu, Satu Mare, hodiny | město zužuje; 1 → hodiny, víc → ask (obor/jméno)
+
+Dobrý den, myslíte, že byste mohli nadiktovat e-mail na paní doktorku Dary Matejovou z kliniky Botan Siker?
+=> Matei Daria, Clinica Botosani Care, e-mail | klinika rozbitá (Botan Siker); jméno + příjmení; 1 → e-mail, víc → ask
+
+Dobrý den, můžu dostat kontakt na paní doktorku Lauru? Dumitrovou?
+=> Dumitru Laura, kontakt | 1 → kontakt, víc → ask; jméno a příjmení odděleno otazníkem
+
+Já vás zdravím, potřeboval bych kontakt na někoho z kliniky Targu Murešker.
+=> Clinica Targu Mures Care, bez příjmení | doptat obor (nebo město Targu Mures → ask obor)
+
+Dobrý den, dovolal jsem se do kliniky Lugoj Care.
+=> nikdo, jen otázka, kam se dovolal | říct, co bot je, zeptat se, co potřebuje; bez toolu
+
+Dobrý den, a potřeboval bych kontakt na paní doktorku. Oano z kliniky. Oradea Care.
+=> jméno nerozpoznatelné (Oano), Clinica Oradea Care | doptat příjmení; nikdy nehádat
+
+Dobrý den, chci se zeptat, dokolika má paní doktorka, Maria Ionesca? A pokud na ní máte e-mail ještě, tak, budu moc rád.
+=> Ionescu Maria, hodiny + e-mail | 1 → hodiny a e-mail, víc → ask
+
+Dobrý den, chtěl bych se zeptat, paní doktorka Nikola Čiová, tady od nás z Botosany, jaké, jaké má číslo, prosím?
+=> Chivu (žena, Nicoleta?), Botosani, telefon | město zužuje; 1 → telefon, víc → ask; STT: Čiová, Botosany  [OVĚŘ příjmení]
+
+Dobrý den, slyšíme se? Chtěl bych se zeptat, na číslo, pana doktora. Stefana Matěje.
+=> Matei Stefan, telefon | 1 → telefon, víc → ask; "slyšíme se" ignorovat, pokračovat
+
+Hledám doktora Vasilevsku, neurologa v Targoviste.
+=> Vasilescu Florin, Neurology, Targoviste | found (1)
+
+Dobrý den, potřebuji, ee kardiologa, stane zkus. Temešváru.
+=> Stanescu, Cardiology, Timisoara | STT rozbilo jméno na "stane zkus"; buď found/ask přes obor+město, nebo confirm_name
+
+Dobrý den, schání pediatra čivu v Brasově.
+=> Chivu, Pediatrics, Brasov | ask_clarification (jméno: Radu, nebo Laura)
+
+Dobrý den, já scháním praktickou lékařku, paní doktorku. Popescu z Or, Oradei.
+=> Popescu (žena), Family Medicine, Oradea | 1 → found, víc → ask (jméno); STT "Or, Oradei"
+
+Dobrý den, potřeboval bych vědět, do kolika hodin je dnes doktor Drahomír. Gastro. enterolog. Jasi.
+=> Dragomir Stefan, Gastroenterology, Iasi, hodiny | found → hodiny; jméno, obor i město rozsekané tečkami
+
+Dobrý den, potřeboval bych e-mail na pana doktora Floriana Vasilevsku.
+=> Vasilescu Florin, e-mail | 1 → e-mail, víc → ask
+
+Dobrý den, chtěl jsem si zeptat, potřebuji, ee, nějakého kardiologa, v Temešváru.
+=> Cardiology, Timisoara, bez příjmení | nabídnout kandidáty nebo ask (jméno/klinika)
+
+Dobrý den, chtěl bych kontakt na nějakého dětskýho lékaře v Kůži.
+=> Pediatrics, Cluj-Napoca | STT "Kůži" musí projít jako Kluž; nabídnout kandidáty
+
+Dobrý den, scháním ginekologa v ploj testi? který mluví maďarským.
+=> Obstetrics and Gynecology, Ploiesti, Hungarian | STT "ploj testi" s mezerou musí projít jako Ploiesti
+
+A jaký na něj máte telefon?
+=> kontakt, druhý tah po nalezení jednoho | get_doctor_contact
+
+Môžete mi na nej dať číslo? A adresu?
+=> kontakt, druhý tah, slovensky | get_doctor_contact, odpověď česky
+
+Že jsou ty, ee, údaje aktuální?
+=> čerstvost dat | říct datum snapshotu, bez hledání
+
+Bolí mě ještě jeden hlava. Co si na to mám vzít?
+=> mimo rozsah | jedna věta, nabídnout lékaře oboru, bez toolu
+
+Silnou bolest na hrudi a špatně se mi dýchá.
+=> 155 | jediná věta
+
+Dovolal jsem se na pohotovost?
+=> nikdo | říct, co bot je (vyhledávání lékařů a kontaktů, ne pohotovost), při nouzi 155; bez toolu
+
+Potřebuji rychle vědět, jak zastavit krvácení.
+=> 155 | jediná věta
+
+Kamarád upadl. na hlavu a potřebuji vědět, jestli s ním můžu hýbat.
+=> 155 | jediná věta (úraz hlavy = akutní)
+
+Amate na pana doktora nějaký jeho osobní číslo, já se mu nemohu dovolat.
+=> kontakt, druhý tah | dát jen číslo z adresáře a říct, že jiné nemá
+
+Můžete panu doktorovi říct, že jsem ho schránil?
+=> mimo rozsah | vzkazy nepředává, jedna věta, bez toolu
+
+Dobrý den, potřebuji telefon na pana, doktora. Vlada Moldanová.
+=> Moldovan Vlad, telefon | 1 → telefon, víc → ask; přechýlené mužské jméno
+
+Dobrý den, potřeboval bych adresu. Na pana Rusu Andreje. Ze Santumare.
+=> Rusu Andrei, Satu Mare, adresa | STT "Santumare" musí projít jako Satu Mare; 1 → adresa, víc → ask
+
+
+# ---------------------------------------------------------------------------
+# ODPOVEDI PACIENTA V DRUHEM A TRETIM TAHU (realne STT prepisy, beze zmeny)
+# => co bylo mineno | ocekavane chovani bota po tomto tahu
+# Tyto vety se pouzivaji jako dalsi tah v `turns`, ne samostatne.
+# ---------------------------------------------------------------------------
+
+## Odpoved na otazku po meste (predchozi tah: bot se ptal "V jakem meste?")
+
+v Kluži
+=> Cluj-Napoca | find_doctors znovu s městem, zúžit, další best_question nebo 1
+
+tam je Švár
+=> Timisoara (STT rozbilo "Temešvár" na "tam je Švár") | pokud resolveCity nezvládne, bot se ptá znovu na město; pokud zvládne, zúžit
+
+v Jasech
+=> Iasi | zúžit
+
+Satu mare
+=> Satu Mare | zúžit
+
+Nevím přesně, někde v Semihradsku
+=> město neznámé (Sedmihradsko = region, ne město) | bot řekne, že potřebuje město nebo obor, nabídne nejčastější města z best_question ("například Kluž, Brašov, Sibiu")
+
+## Vyber ze 2 az 4 jmen (predchozi tah: bot vyjmenoval krestni jmena)
+
+Dáryu
+=> Daria | find_doctors s first_name, 1 → found
+
+Bogdana
+=> Bogdan | 1 → found
+
+Ta první
+=> první z vyjmenovaných | bot vezme první jméno, které sám vyjmenoval, 1 → found (nikdy neptát se "která první?")
+
+Ani jedna, hledám jinou
+=> žádná z nabízených | bot řekne, že jiné s tím příjmením v daném zúžení nemá, a nabídne jiné město nebo obor
+
+Laura ta pediatrička
+=> Laura, Pediatrics | 1 → found
+
+## Odpoved na otazku po oboru
+
+Ta psychiatrička
+=> Psychiatry (žena) | zúžit oborem
+
+Kardiolog
+=> Cardiology | zúžit oborem
+
+Nevím co dělá znám jenom jeho jméno
+=> obor neznámý | bot přeskočí obor a zeptá se na další atribut z best_question (město, klinika, jméno), nikdy neopakuje stejnou otázku
+
+## Potvrzeni jmena (predchozi tah: "Slysel jsem spravne, ze hledate doktora X?")
+
+Jo jo to je on
+=> ano | pokračovat s potvrzeným příjmením, find_doctors, zúžit nebo 1
+
+No tak to teďka nevím teda
+=> nejistý | bot nabídne hláskování nebo jiný údaj (město, obor); nepokračuje s nepotvrzeným jménem
+
+Ne, Dumitrescu. Dumitru.
+=> pacient sám váhá mezi dvěma příjmeními | bot položí otázku "Dumitrescu, nebo Dumitru?" (last_name best_question); nehádat
+
+Ne pan doktor Nestor n jako nůž
+=> Nistor (hláskování "N jako nůž") | find_doctors se surname Nistor/Nestor, zúžit; nikdy "Nestor" nepotvrzovat znovu
+
+## Po nalezeni jednoho doktora (predchozi tah: bot rekl "Mam ji: doktorka X")
+
+A do kolika hodin má
+=> hodiny | get_doctor_contact, přečíst availability
+
+A email
+=> e-mail | get_doctor_contact, přečíst e-mail po částech
+
+Kde přesně je
+=> adresa | get_doctor_contact, přečíst adresu a kliniku
+
+Díky to je všechno
+=> konec | rozloučit se jednou větou, bez toolu
+
+## Zmena v pulce hovoru
+
+Vlastně radši Mikulov tam než Váru.
+=> STT nesmysl za "radši někoho v Temešváru" | Mikulov není v síti → říct to; pokud model vytáhne Temešvár, zúžit; nikdy neopustit dosavadní kontext (příjmení zůstává)
+
+Ne gynekologa kardiologa
+=> gynekolog místo kardiologa (oprava oboru) | find_doctors znovu se stejným městem/jménem a novým oborem; STT vynechalo "ne", bot musí vzít poslední obor
