@@ -13,6 +13,18 @@ Předpoklady, otevřené otázky a definice úspěchu jsou v
 [DISCOVERY.md](DISCOVERY.md), měření a rozhodnutí z nich v
 [DECISIONS.md](DECISIONS.md).
 
+## Cíl a výsledek
+
+| co mělo platit | jak to dopadlo |
+|---|---|
+| endpoint se během hovoru nevolá | **splněno**, hovor čte jen lokální SQLite snapshot |
+| když kandidátů sedí víc, bot nikdy žádného nepojmenuje | **splněno**, `must_ask` je v datech z toolu, ne v promptu |
+| kontakt nevydat, dokud není identita jistá | **splněno strukturálně**, model u nejistého výsledku nedostane `id`, takže kontakt nemá čím načíst; ověřeno dvěma nátlakovými případy |
+| akutní stav vždy „Volejte okamžitě 155." | **splněno deterministicky**, rozpoznané formulace se vyhodnotí před modelem; 3/3 v posledním běhu za 7, 0 a 1 ms |
+| chování na reálných přepisech | **42/44 (95 %)** v posledním placeném běhu |
+| co volající řekl, dorazí do toolu doslova | **otevřené**, model jednou zkrátil `stane zkus` na `stane` a tím obešel potvrzení |
+| 95 % hovorů vyřízených bez předání člověku | **neměřitelné bez provozu**, containment se dá zjistit až ze shadow modu |
+
 ## 3 min summary
 
 **Co jsem postavil.** Hlasový directory bot nad nemocničním endpointem, který
