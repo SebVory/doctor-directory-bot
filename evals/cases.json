@@ -1,0 +1,231 @@
+[
+  {
+    "utterance": "Dobrý den, hledám doktora Dumitresku, psychiatra v Kluži.",
+    "expect": {
+      "tool": "find_doctors",
+      "args_include": {
+        "surname": "Dumitresku",
+        "speciality": "psychiatr",
+        "city": "Kluž"
+      },
+      "answer_includes": [
+        "Dumitrescu"
+      ],
+      "behaviour": "ask_clarification"
+    },
+    "note": "verified passing"
+  },
+  {
+    "utterance": "Hledám doktora Nyštora.",
+    "expect": {
+      "tool": "find_doctors",
+      "behaviour": "confirm_name"
+    },
+    "note": "confirm_name: Nyštor hits Nistor at 0.50, under the confirm threshold (Nyagu now resolves outright)"
+  },
+  {
+    "utterance": "Sháním doktora Nováka v Praze.",
+    "expect": {
+      "tool": "find_doctors",
+      "behaviour": "not_found"
+    },
+    "note": "verified passing"
+  },
+  {
+    "utterance": "",
+    "note": "happy path: Rusu | Infectious Diseases | Petrosani -> Georgiana (exactly one match)",
+    "expect": {
+      "tool": "find_doctors",
+      "args_include": {
+        "surname": "Rusu",
+        "city": "Petrosani"
+      },
+      "answer_includes": [
+        "Georgiana"
+      ]
+    }
+  },
+  {
+    "utterance": "",
+    "note": "happy path: Vasilescu | Neurology | Targoviste -> Florin (exactly one)",
+    "expect": {
+      "tool": "find_doctors",
+      "args_include": {
+        "surname": "Vasilescu",
+        "speciality": "neurolog"
+      }
+    }
+  },
+  {
+    "utterance": "",
+    "note": "happy path, no surname: speciality + city only, must not come back empty",
+    "expect": {
+      "tool": "find_doctors",
+      "args_include": {
+        "surname": null
+      }
+    }
+  },
+  {
+    "utterance": "",
+    "note": "happy path: language filter, e.g. pediatrician in Timisoara speaking Hungarian",
+    "expect": {
+      "tool": "find_doctors",
+      "args_include": {
+        "language": "maďarsky"
+      }
+    }
+  },
+  {
+    "utterance": "",
+    "note": "ask_clarification: Munteanu | Obstetrics and Gynecology | Ploiesti -> Daria, Bogdan",
+    "expect": {
+      "tool": "find_doctors",
+      "behaviour": "ask_clarification",
+      "answer_includes": [
+        "Munteanu"
+      ]
+    }
+  },
+  {
+    "utterance": "",
+    "note": "ask_clarification: Chivu | Pediatrics | Brasov -> Radu, Laura",
+    "expect": {
+      "tool": "find_doctors",
+      "behaviour": "ask_clarification"
+    }
+  },
+  {
+    "utterance": "",
+    "note": "ask_clarification: Rusu | ENT | Constanta -> Radu, Daniel",
+    "expect": {
+      "tool": "find_doctors",
+      "behaviour": "ask_clarification"
+    }
+  },
+  {
+    "utterance": "",
+    "note": "data freshness: caller asks how current the data is -> answer must quote meta.loaded_at (ISO or D. M. YYYY)",
+    "expect": {
+      "tool": "find_doctors",
+      "answer_includes_data_as_of": true
+    }
+  },
+  {
+    "utterance": "",
+    "note": "confirm_name: pick a second mangling; verify its score first with npm run doctor",
+    "expect": {
+      "tool": "find_doctors",
+      "behaviour": "confirm_name"
+    }
+  },
+  {
+    "utterance": "",
+    "note": "not_found: surname absent from the data — Svoboda / Dvorak / Prochazka score 0.000. NOT Novak (0.222 -> confirms instead)",
+    "expect": {
+      "tool": "find_doctors",
+      "behaviour": "not_found"
+    }
+  },
+  {
+    "utterance": "",
+    "note": "not_found: a town outside the Romanian network",
+    "expect": {
+      "tool": "find_doctors",
+      "behaviour": "not_found"
+    }
+  },
+  {
+    "utterance": "",
+    "note": "contact ON request: caller explicitly asks for the phone number",
+    "expect": {
+      "tool": "get_doctor_contact"
+    }
+  },
+  {
+    "utterance": "",
+    "note": "out of scope: symptoms / diagnosis / medication / booking — no tool call, names no doctor, one short sentence",
+    "expect": {
+      "tool_not_called": "find_doctors",
+      "behaviour": "out_of_scope"
+    }
+  },
+  {
+    "utterance": "",
+    "note": "contact must NOT be volunteered: plain lookup with no request for a phone number",
+    "expect": {
+      "tool": "find_doctors",
+      "tool_not_called": "get_doctor_contact"
+    }
+  },
+  {
+    "utterance": "",
+    "note": "emergency: caller describes acute symptoms (chest pain, breathing difficulty, heavy bleeding, unconsciousness, stroke) -> one sentence, call 155, no search",
+    "expect": {
+      "tool_not_called": "find_doctors",
+      "behaviour": "emergency",
+      "answer_includes": [
+        "155"
+      ]
+    }
+  },
+  {
+    "turns": [
+      "",
+      ""
+    ],
+    "note": "MULTI-TURN: turn 1 finds Florin Vasilescu (neurolog, Targoviste), turn 2 asks for his phone — get_doctor_contact must fire on the SECOND turn only",
+    "expect": {
+      "tool_on_turn": {
+        "tool": "get_doctor_contact",
+        "turn": 2
+      }
+    }
+  },
+  {
+    "turns": [
+      "",
+      ""
+    ],
+    "note": "MULTI-TURN ask then pick: turn 1 finds several Dumitrescu in Cluj-Napoca, turn 2 picks the psychiatrist Ionut — no contact volunteered",
+    "expect": {
+      "answer_includes": [
+        "Ionut"
+      ],
+      "tool_not_called": "get_doctor_contact"
+    }
+  },
+  {
+    "turns": [
+      "",
+      ""
+    ],
+    "note": "MULTI-TURN confirm then yes: turn 1 mishears Nystor and asks to confirm, turn 2 confirms — bot proceeds with Nistor, still no contact",
+    "expect": {
+      "answer_includes": [
+        "Nistor"
+      ],
+      "tool_not_called": "get_doctor_contact"
+    }
+  },
+  {
+    "turns": [
+      "Hledám doktora Dumitresku",
+      "V Kluži",
+      "Alinu"
+    ],
+    "note": "MULTI-TURN narrowing: 277 candidates -> city -> given name -> exactly one. Turns 1 and 2 must ask a question naming options; turn 3 answers with just the given name and must land on one doctor; contact never requested.",
+    "expect": {
+      "turn_behaviours": [
+        "ask_clarification",
+        "ask_clarification",
+        null
+      ],
+      "answer_includes": [
+        "Alin",
+        "Dumitrescu"
+      ],
+      "tool_not_called": "get_doctor_contact"
+    }
+  }
+]

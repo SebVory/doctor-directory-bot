@@ -1,0 +1,74 @@
+/**
+ * Outcome vocabulary shared by the eval runner and its tests.
+ *
+ * Patterns run against folded text (lowercase, diacritics stripped), so they are
+ * written in ASCII: "nenašel" arrives as "nenasel".
+ */
+
+/** lowercase + strip diacritics, so "Kluži" and "kluzi" compare equal. */
+export function fold(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/\p{M}+/gu, "");
+}
+
+export type Behaviour =
+  | "ask_clarification"
+  | "confirm_name"
+  | "not_found"
+  | "out_of_scope"
+  | "emergency";
+
+/** out_of_scope is checked structurally, not by phrasing — see checkCase. */
+export const BEHAVIOUR_PATTERNS: Record<Exclude<Behaviour, "out_of_scope">, RegExp> = {
+  // Three shapes of "which one do you mean": an interrogative pronoun, a count of
+  // candidates, or an alternation ending in a question mark — the last is how the
+  // bot names best_question's options ("… Alina, Andrei, nebo Cristina?").
+  ask_clarification:
+    /\b(ktereho|kterou|ktery|kterych|kterem)\b|\bmam (jich )?(dva|dve|tri|ctyri|pet|sest|sedm|osm|devet|deset|jedenact|dvanact|vic)\b|\bnebo\b[^?]*\?/,
+  confirm_name: /\b(slysel|slysela|rozumel|rozumela) jsem spravne\b|\bmyslite (doktora|doktorku|pana|pani)\b/,
+  // Czech negation carries the ending, so match the stem plus the endings a bot
+  // actually produces: nemám/nemáme, nenašel/nenašla/nenašli, neznám/neznáme,
+  // nenacházím. Word order is free, so the "v seznamu není" phrasings are
+  // matched in both directions.
+  not_found:
+    /\bnema(m|me)\b|\bnenas(el|la|li|ly)\b|\bnezna(m|me)\b|\bnenachaz(im|ime)\b|\bnefiguruje\b|\bneni v (seznamu|databazi|nasi siti)\b|\bv (seznamu|databazi|nasi siti) (neni|nikoho|nemam|nemame)\b/,
+  emergency: /\b155\b/,
+};
+
+/** An emergency answer must be one short line, or "155" gets buried. */
+export const EMERGENCY_MAX_CHARS = 80;
+
+/**
+ * What actually happened on this call, derived from the answer and the tools that
+ * ran — not from what the case expected. Same shape a pilot would log per call,
+ * so the distribution is comparable between evals and production.
+ *
+ * Order is precedence: safety first, then the terminal action, then phrasing.
+ */
+export const OUTCOMES = [
+  "emergency",
+  "contact",
+  "confirm_name",
+  "ask_clarification",
+  "not_found",
+  "out_of_scope",
+  "found",
+  "other",
+] as const;
+export type Outcome = (typeof OUTCOMES)[number];
+
+export function classify(answer: string, toolCalls: { name: string }[]): Outcome {
+  const text = fold(answer);
+  const called = (name: string): boolean => toolCalls.some((c) => c.name === name);
+
+  if (BEHAVIOUR_PATTERNS.emergency.test(text)) return "emergency";
+  if (called("get_doctor_contact")) return "contact";
+  if (BEHAVIOUR_PATTERNS.confirm_name.test(text)) return "confirm_name";
+  // not_found before ask_clarification: a not-found answer almost always ends
+  // "…obor, nebo město?", which the clarification pattern would otherwise claim,
+  // and the outcome breakdown is only useful if it tells those two apart.
+  if (BEHAVIOUR_PATTERNS.not_found.test(text)) return "not_found";
+  if (BEHAVIOUR_PATTERNS.ask_clarification.test(text)) return "ask_clarification";
+  if (toolCalls.length === 0) return "out_of_scope";
+  if (called("find_doctors")) return "found";
+  return "other";
+}
