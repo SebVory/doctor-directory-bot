@@ -110,15 +110,19 @@ nikdy nekončí na jméně. Kombinace jméno, město a obor jednoznačně rozli�
 6969 z 7029 řádků (99,1 %); zbývajících 60 řádků tvoří 30 dvojic lišících se
 jen telefonem, adresou a jazyky, a na ty se bot ptá jazykem a řekne proč.
 
-Tři pasti. Klinik je 42 a měst 42 a v plném snapshotu tvoří bijekci: každé
-město má jednu kliniku a každá klinika patří jednomu městu („Clinica {město}
-Care“). Neznamená to jednu kliniku na jednoho lékaře, naopak mnoho lékařů sdílí
-stejnou kliniku. Otázka na kliniku proto nepřinese nic navíc proti otázce na
-město a v sadě disambiguačních otázek není. E-mail se odvozuje ze jména a
-kliniky, takže 616 skupin lékařů, některé po třech i čtyřech, sdílí schránku;
-celkem jde o 669 řádků nad rámec prvního v každé skupině. Kontakt nese
-`email_shared` a bot řekne, že přímý je telefon. PSČ je náhodné, například
-v Kluži je 173 různých, proto se nepoužívá.
+Čtyři pasti, tedy pole, která vypadají použitelně a nejsou. Klinik je 42 a měst
+42 a v plném snapshotu tvoří bijekci: každé město má jednu kliniku a každá
+klinika patří jednomu městu („Clinica {město} Care“). Neznamená to jednu kliniku
+na jednoho lékaře, naopak mnoho lékařů sdílí stejnou kliniku. Otázka na kliniku
+proto nepřinese nic navíc proti otázce na město a v sadě disambiguačních otázek
+není. Okres je totéž o patro výš: žádné ze 42 měst neleží ve dvou okresech,
+takže z města okres plyne, a okresů je jen 34, protože šest jich pokrývá víc měst
+(Cluj je Cluj-Napoca i Turda). Ptát se na okres tedy odřízne míň než ptát se na
+město a po městě už nepřidá nic. E-mail se odvozuje ze jména a kliniky, takže 616
+skupin lékařů, některé po třech i čtyřech, sdílí schránku; celkem jde o 669 řádků
+nad rámec prvního v každé skupině. Kontakt nese `email_shared` a bot řekne, že
+přímý je telefon. PSČ je náhodné, například v Kluži je 173 různých, proto se
+nepoužívá. Jediné opravdu unikátní pole je telefon, 7029 ze 7029.
 
 ### Kolik kandidátů zbyde
 

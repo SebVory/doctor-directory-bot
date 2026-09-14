@@ -87,13 +87,18 @@ file is dated and historical.
 
 ---
 
-## 5. Three fields in the data are traps
+## 5. Four fields in the data are traps
 
 **Measured.**
 
 - **`clinic_name` is location-linked, not doctor-unique** – in the full snapshot,
   each of the 42 clinic names maps to exactly one location, and each location has
   one clinic name (`Clinica {city} Care`). Multiple doctors can share that clinic.
+- **`county` is `location` one level up** – no city of the 42 sits in two
+  counties, so the county follows from the city, and there are only 34 of them
+  because six span several cities (Cluj covers Cluj-Napoca and Turda). Asking for
+  the county therefore cuts less than asking for the city and adds nothing once
+  the city is known. Same shape as the clinic trap, one level coarser.
 - **`postal_code` is noise** – 173 distinct postal codes inside Cluj-Napoca alone.
 - **`email` is shared by 616 groups with multiple rows**, because it derives from
   name + clinic. `phone` is the only genuinely unique field (7029/7029).
@@ -101,13 +106,20 @@ file is dated and historical.
 **Decided.** `clinic_name` is out of the disambiguation set – asking which clinic
 asks which city in less natural words and adds no information in this snapshot.
 It stays in the tool payload so the bot can say it once one doctor remains.
-`postal_code` is never used for location. Contacts carry `email_shared`, and the
+`county` is ingested and stored, and queried by nothing: a caller who offers one
+is answered through the city, never filtered by it. `postal_code` is never used
+for location. Contacts carry `email_shared`, and the
 bot says the address belongs to the clinic while the phone is the direct line.
+
+Two smaller shapes, recorded rather than acted on: `availability` is one of five
+templates, so it answers "how late are they open" and can never disambiguate two
+doctors, and `education` is one of six universities.
 
 **Recheck rule.** This is a measured property of the current full snapshot, not
 a universal property of hospital data. If a future snapshot has a location with
-multiple clinic names or a clinic name in multiple locations, rerun the ambiguity
-analysis and reconsider whether clinic is useful as a disambiguation attribute.
+multiple clinic names, a clinic name in multiple locations, or a city split
+across counties, rerun the ambiguity analysis and reconsider whether those
+attributes are useful for disambiguation.
 
 ---
 
