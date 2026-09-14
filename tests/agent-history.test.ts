@@ -116,3 +116,41 @@ describe("tool failures", () => {
     }
   });
 });
+
+describe("time to first token", () => {
+  it("is null when nothing streamed", async () => {
+    // The scripted client has no stream(), so runTurn falls back to create().
+    const result = await runTurn("Dobrý den", [], {
+      trace: false,
+      client: scripted([reply([{ type: "text", text: "Dobrý den." } as Anthropic.ContentBlock], "end_turn")]),
+    });
+    expect(result.ttft_ms).toBeNull();
+    expect(result.answer).toBe("Dobrý den.");
+  });
+
+  it("is reported from the streamed call once tool results are in hand", async () => {
+    // Second call streams; the fake emits one text delta before finishing.
+    const toolUse = { type: "tool_use", id: "t1", name: "no_such_tool", input: {} } as Anthropic.ContentBlock;
+    const final = reply([{ type: "text", text: "Mám ji." } as Anthropic.ContentBlock], "end_turn");
+    let index = 0;
+    const streaming = {
+      messages: {
+        create: async () => reply([toolUse], "tool_use"),
+        stream: (_p: Anthropic.MessageCreateParamsNonStreaming) => ({
+          on: (_e: "text", listener: (d: string) => void) => {
+            listener("Mám");
+            return undefined;
+          },
+          finalMessage: async () => {
+            index += 1;
+            return final;
+          },
+        }),
+      },
+    };
+    const result = await runTurn("Hledám doktorku Rusu", [], { trace: false, client: streaming });
+    expect(result.ttft_ms).not.toBeNull();
+    expect(result.ttft_ms).toBeGreaterThanOrEqual(0);
+    expect(index).toBe(1);
+  });
+});
