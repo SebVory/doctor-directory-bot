@@ -79,9 +79,11 @@ minimum viable question set. No lookup can end on a name alone. City is the
 better first question (42 values, 141–196 doctors each) than speciality (20
 values, 325–381 each).
 
-The 43 raw macOS transcripts, the earlier 38-case agent eval, and the current
-40-case eval are different collections and must not be compared as if they had
-the same denominator.
+The 43 raw macOS transcripts, the 38-case agent eval of 11 September, and the
+44-case eval that stands today (42 until two guard cases were added on
+14 September) are different collections and must not be compared as if they had
+the same denominator. The current score is **42/44**; every other figure in this
+file is dated and historical.
 
 ---
 
@@ -134,9 +136,14 @@ used for surnames only, with a test asserting `normalize("Craiova")` is untouche
 
 **Question.** Was the table tuned to the handful of names used to build it?
 
-**Measured.** Five surnames never used in its construction: Draghomír→Dragomir
-0.765, Ijakob→Iacob 0.857, Rusů→Rusu 1.000, Stánová→Stan 0.721, Jonesku→Ionescu
-0.800. All five resolve, worst 0.72.
+**Measured, before the `ije`/`ija`/`ya` rules below.** Five surnames never used
+in its construction: Draghomír→Dragomir 0.765, Ijakob→Iacob 0.857, Rusů→Rusu
+1.000, Stánová→Stan 0.721, Jonesku→Ionescu 0.800. All five resolved, worst 0.72.
+
+**The same five today**, with those rules in place: Draghomír 0.765, Ijakob
+**1.000**, Rusů 1.000, Stánová **1.000**, Jonesku 0.800. Worst is now 0.765. The
+two that moved are exactly the ones carrying the Czech glide the rules describe,
+which is the point of the entry: the gap was in the table, not in trigrams.
 
 **Separately (before the `ije`/`ija` rules).** `Ilije` against `Ilie` scored **0.000** – no shared trigram. This looked like a hard limit of trigrams on four-letter surnames. It was not: the table had no rule for the glide a Czech ear inserts. Adding `["ije","je"]` and `["ija","ja"]` took it to **1.000**, and `Dijakonu`→`Diaconu` from 0.727 to 1.000, with nothing regressing. A phonetic fallback was planned and turned out to be unnecessary.
 
@@ -354,8 +361,9 @@ else the caller gave.
 
 **Measured.** The run that followed scored 41/42 with `confirm_name` at **4**,
 and `stane zkus` reached the read-back branch – the guard that had been dead at 0
-was alive. The latest billed run, 44 cases, scored **42/44 (95 %)** and is the
-current figure.
+was alive. The latest billed run, 44 cases on 14 September, scored **42/44
+(95 %)** and is the current figure. It is also the run that measured the
+emergency guard of §18, which had been merged before it.
 
 That later run also showed the limit of this design, which §19 covers: the guard
 is only as good as the string the model hands over, and in that run it handed
@@ -469,16 +477,20 @@ to *stop*, present-tense stroke signs with past-tense framing excluded. Twelve
 negative cases are pinned by tests, including "Děda měl loni mrtvici, hledám
 neurologa", "Hledám doktora na bolesti hlavy" and "Hledám doktora, který léčí
 krvácení z nosu"; two of them are also eval cases now, asserting that a search
-still happens. Across all 42 existing eval utterances the guard fires on exactly
-the three emergency ones.
+still happens. Across the 42 utterances the suite held when the guard was
+written, it fires on exactly the three emergency ones; the suite is 44 today.
 
 **The asymmetry, stated on purpose.** A false positive tells someone who did not
 need it to call 155. A false negative leaves someone bleeding on the line talking
 to a directory. The guard is tuned towards firing, and every pattern that could
 overreach has a test naming the query it must not steal.
 
-**Not verified against the live model.** This entry records a code change and its
-offline tests. No billed run has been made since.
+**Verified live, in the 42/44 run of 14 September.** All three emergency cases
+answered `Volejte okamžitě 155.` in 7 ms, 0 ms and 1 ms, against 3 to 22 seconds
+for everything else, with the dispatch reasons in the run log; 41 of the 44 cases
+were billed and the three emergencies cost nothing. Both negative guard cases
+searched normally and neither said 155. That run measured this entry, it does not
+predate it.
 
 ---
 
@@ -534,8 +546,9 @@ argument rather than a number. **It is designed, not implemented.**
 
 ## What is deliberately not done
 
-- **Four-letter surnames** other than the two fixed by the table rules. They fail
+- **Four-letter surnames** other than Ilie, which the `ije` rule fixed. They fail
   safe, into "not found, ask again", never onto a wrong doctor.
-- **Caller verification before contact.** The brief describes a public directory,
-  so contacts are public. This is an assumption to confirm, not a thing to build.
+- **Caller verification before contact.** Confirmed in the exercise brief: the
+  list is a public directory, the "golden pages", so anyone may have a contact.
+  Nothing to build, and not an open question.
 - **Shadow mode, monitoring, real STT/TTS, rate limiting.** Pilot work.
