@@ -8,11 +8,22 @@
  *
  * Deterministic: same input, same output, no seed to remember.
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
 const TARGET = Number(process.env.SAMPLE_SIZE ?? 500);
 const SOURCE = process.env.SNAPSHOT_FILE ?? "./data/full-snapshot/data-snapshot.json";
 const OUT = "./data/data-sample.json";
+
+// The source is the interview fixture and is deliberately not committed, so this
+// is the one command in the repo that cannot work on a fresh clone. Say that in
+// one screen instead of throwing an ENOENT stack trace at whoever tries it.
+if (!existsSync(SOURCE)) {
+  console.error(`[sample] no snapshot at ${SOURCE}`);
+  console.error(`[sample] ${OUT} is already committed, so you need this command only to regenerate it.`);
+  console.error("[sample] Have the exercise snapshot? Save it as data/full-snapshot/data-snapshot.json,");
+  console.error("[sample] or point SNAPSHOT_FILE at wherever it is. Otherwise ask the repository owner for it.");
+  process.exit(1);
+}
 
 type Row = Record<string, unknown> & {
   last_name: string;
