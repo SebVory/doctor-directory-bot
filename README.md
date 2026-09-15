@@ -40,8 +40,8 @@ store vybere otázku, která jich vyřadí nejvíc.
 
 **Jak jsem to zkoušel.** Do macOS diktování jsem nadiktoval 43 reálných českých
 přepisů, včetně komolených rumunských jmen, rozsekaných měst, češtiny
-s angličtinou a běžných hlasových výplní. Z nich vzniklo 44 behaviorálních
-eval cases. Běhal jsem je přes skutečný Anthropic tool loop, ne jen přes unit
+s angličtinou a běžných hlasových výplní. Vzniklo z nich 42 ze 44 behaviorálních
+eval cases; zbylé dva jsou psané ručně jako negativní hranice emergency guardu. Běhal jsem je přes skutečný Anthropic tool loop, ne jen přes unit
 testy; historie, raw výsledky a atribuce chyb jsou v `evals/RUNS.md`.
 
 **Jak to dopadlo.** Poslední plný běh skončil 42/44, tedy 95 %. Není to ale těch
@@ -208,7 +208,7 @@ navázané.
 jistotu: „Rusuová" sedlo na „Rusu" jen na 0,721, tedy pod prahem, takže by se bot
 ptal „slyšel jsem správně?" na jméno, které slyšel perfektně. Odstranění koncovky
 zvedne 24 ze 78 skloňovaných tvarů z pod 0,8 na 1,000. Do obecného `normalize()`
-to nesmí, protože město `Craiova` by se změnilo na `kraj`.
+to nesmí, protože město `Craiova` by se změnilo na `krai`.
 
 **5. Fuzzy hledání je stavěné proti českému STT**, ne proti překlepům: trigramový
 Dice nad transliterační tabulkou, bonus za shodu prvních tří písmen, top 3
@@ -401,8 +401,9 @@ npm run doctor -- "Hledám doktora Dumitresku"
 
 ## Co vědomě chybí
 
-Evals jsou z větší části jednotahové; dvoutahových a třítahových je šest a
-pokrývají nejdůležitější tok, tedy doptání a kontakt až na vyžádání.
+Evals jsou z větší části jednotahové; vícetahových je jedenáct, z toho tři
+třítahové, a pokrývají nejdůležitější tok, tedy doptání a kontakt až na
+vyžádání.
 
 Latence je změřená bez STT a TTS. V discovery jsem si dal cíl pod 1,5 s od
 konce věty do začátku odpovědi a **ten cíl zatím není splněný**: v posledním běhu

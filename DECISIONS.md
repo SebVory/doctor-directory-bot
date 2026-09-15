@@ -139,7 +139,7 @@ This matters because the confirm-the-name branch is score-gated: the bot was
 asking "did I hear you right?" about names it had heard perfectly.
 
 **Constraint discovered.** It cannot live in the general `normalize()`, because
-the city `Craiova` would become `kraj`. Hence a separate `normalizeSurname()`
+the city `Craiova` would become `krai`. Hence a separate `normalizeSurname()`
 used for surnames only, with a test asserting `normalize("Craiova")` is untouched.
 
 ---
