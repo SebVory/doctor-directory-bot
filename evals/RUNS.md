@@ -449,6 +449,12 @@ Result: **42/44 – 95 %** (threshold 80 %).
 Conversation latency avg **8878 ms**, max **22206 ms**.
 TTFT avg **2105 ms**, max **7048 ms**, **37 of 44** answers streamed.
 
+That latency average is per case, not per turn, and 11 of the 44 cases are
+multi-turn: 390 639 ms over 58 turns is **6735 ms a turn**, and a single-turn
+case that actually calls the API averages **7578 ms**, worst 13 359. The three
+emergency cases sit in the average at 7, 0 and 1 ms because they never reach the
+API. Recomputed from this log afterwards, no rerun.
+
 ```text
 outcome breakdown (what happened, not what was expected):
   emergency            3
