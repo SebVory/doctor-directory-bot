@@ -33,17 +33,18 @@ vrací celý seznam až za deset minut. Během hovoru endpoint nevolá: plánova
 ingest validuje snapshot, atomicky ho prohodí v SQLite a agent nad ním má jen
 dva read-only tooly, hledání a kontakt.
 
-**Co rozhodla data.** Na plném 7029řádkovém snapshotu není jediné celé jméno
-unikátní. Proto jsem zahodil původní nápad porovnávat snapshoty a hledat
-identitu doktora: nic na něj není navázané, snapshot se prostě celý nahradí.
+**Co rozhodla data.** V plném snapshotu na 7029 řádcích není jediné celé jméno
+unikátní. Kvůli tomu jsem zahodil původní nápad porovnávat snapshoty a řešit
+identitu doktora: nic na něj není navázané, takže snapshot přepíšu celý.
 Jméno, město a obor rozliší 6969 řádků z 7029; když zůstane více kandidátů,
 store vybere otázku, která jich vyřadí nejvíc.
 
 **Jak jsem to zkoušel.** Do macOS diktování jsem nadiktoval 43 reálných českých
 přepisů, včetně komolených rumunských jmen, rozsekaných měst, češtiny
 s angličtinou a běžných hlasových výplní. Vzniklo z nich 42 ze 44 behaviorálních
-eval cases; zbylé dva jsou psané ručně jako negativní hranice emergency guardu. Běhal jsem je přes skutečný Anthropic tool loop, ne jen přes unit
-testy; historie, raw výsledky a atribuce chyb jsou v `evals/RUNS.md`.
+eval cases, zbylé dva jsem psal ručně jako negativní hranice emergency guardu.
+Pouštěl jsem je přes skutečný tool loop, ne jen přes unit testy; historie, syrové
+výsledky a příčiny každé chyby jsou v `evals/RUNS.md`.
 
 **Jak to dopadlo.** Poslední plný běh skončil 42/44, tedy 95 %. Není to ale těch
 95 % z discovery: cíl mluví o podílu hovorů vyřízených bez předání člověku,
@@ -51,11 +52,11 @@ kdežto eval sada je schválně sbírka těžkých případů, ne vzorek provozu
 neběží shadow mode vedle recepce, je eval skóre proxy a containment nemám čím
 změřit.
 
-**Kde je limit.** Jeden fail je checker, druhý je důležitější: model jednou
-zkrátil `stane zkus` na `stane` ještě před toolem a tím obešel score-gated
-confirmation. Evals to zachytily, ale současná verbatim garance je stále
-promptová. Další pilotní krok je držet raw STT span mimo model a jistotu počítat
-pesimisticky. Netvrdím, že je tato část hotová.
+**Kde je limit.** Jeden fail je chyba checkeru, druhý je vážnější: model jednou
+zkrátil `stane zkus` na `stane` ještě před toolem a tím obešel potvrzování jména.
+Evals to zachytily, ale pravidlo o doslovném předání je zatím jen v promptu. Další
+krok pro pilot je držet surový úsek přepisu mimo model a jistotu počítat
+pesimisticky. Hotové to není.
 
 ## Kde končí moje část
 
@@ -70,11 +71,11 @@ potvrzování jmen, `best_question`) a nad nimi prompt agenta a evals, které
 hlídají chování, ne text. **Platforma Wonderful** dodává telefonii a SIP, STT
 a TTS, orchestrátor a review queue s metrikami; v repu ji zastupuje CLI.
 
-Ingest je naplánovaná úloha, dva tools Skill, prompt konfigurace agenta a evals
-jejich kontrola. Preamble („Moment, podívám se") vracím zvlášť od odpovědi právě
-proto, aby ho runtime přehrál během tool callu, protože tam se vnímaná latence
-schovává. Jak často stahovat je řádek v cronu a otázka na nemocnici, ne
-konstanta v kódu.
+Ingest je naplánovaná úloha, dva tooly Skill, prompt konfigurace agenta a evals
+jejich kontrola. Přemosťovací větu („Moment, podívám se") vracím zvlášť od
+odpovědi, aby ji runtime mohl přehrát během tool callu; tam se vnímaná latence
+schovává. Jak často stahovat je řádek v cronu a otázka na nemocnici, ne konstanta
+v kódu.
 
 ## Jeden hovor
 
@@ -100,15 +101,15 @@ město, protože to jich vyřadí nejvíc. „Například" v otázce znamená, �
 je víc než ty čtyři jmenované, konkrétně 42 měst. Telefon ani adresu nepřečte,
 dokud si o ně volající neřekne; v posledním tahu se jen zeptá, jestli je chce.
 
-## Je to pomalé a vím proč
+## Latence
 
-Cíl z discovery byl **pod 1,5 s** od konce věty do začátku odpovědi. Poslední běh:
-první token za **2,1 s** v průměru, **7,0 s** v nejhorším případě. Cíl splněný
-není a nechci to schovávat do poznámky pod čarou.
+V discovery jsem si dal cíl **pod 1,5 s** od konce věty do začátku odpovědi.
+Poslední běh: první token za **2,1 s**, v nejhorším případě **7,0 s**. Cíl tedy
+nesplněný, a je to jediné číslo z discovery, které nevyšlo.
 
-Pozor na jmenovatele, sám jsem si o něj jednou zakopl. Runner měřil **celý
-případ**, a 11 ze 44 případů je vícetahových, takže jeho průměr 8,9 s nebyl čas
-jedné odpovědi. Dopočítáno z logu posledního běhu, bez nového volání API:
+Runner do teď měřil celý případ, ne tah, a 11 ze 44 případů jsou hovory o dvou
+nebo třech tazích. Jeho průměr 8,9 s tedy nebyl čas jedné odpovědi, což mě
+chvíli mátlo. Dopočítáno z logu posledního běhu, bez nového volání API:
 
 | jednotka | průměr | max | vzorek |
 |---|---:|---:|---:|
@@ -118,46 +119,41 @@ jedné odpovědi. Dopočítáno z logu posledního běhu, bez nového volání A
 | **hovor** (celý případ) | 8,9 s | 22,2 s | 44 případů |
 | **první token** (TTFT) | 2,1 s | 7,0 s | 37 streamovaných |
 
-Tři emergency případy jsou v tom průměru za 7, 0 a 1 ms, protože k API vůbec
-nedojdou; jednotahový případ, který API opravdu volá, vychází na **7,6 s**.
-Runner od téhle chvíle tiskne všechny tři jednotky zvlášť, ať se to příště nedá
-splést.
+Ty tři emergency případy jsou v průměru za 7, 0 a 1 ms, protože je odbaví guard
+před modelem a k API vůbec nedojdou. Jednotahový případ, který API opravdu volá,
+vychází na **7,6 s**. Runner teď tiskne všechny tři jednotky zvlášť.
 
-Kde ten čas je. Jeden tah znamená **dvě volání modelu**: první se rozhodne, který
-tool zavolat, druhé z výsledku složí větu. Mezi nimi běží dotaz do SQLite a ten
-je změřeně **0,1 až 0,5 ms** na volání nad 7029 řádky, protože tabulka má indexy
-na příjmení, město i obor a fuzzy skóre se počítá jen nad tím, co projde filtrem.
-Jinými slovy: ve storu žádný čas není a zrychlovat ho nemá co. Celý rozdíl mezi
-těmi sedmi sekundami a cílem jsou dvě generování textu za sebou.
+Čas je celý ve dvou voláních modelu na jeden tah: první vybere tool, druhé
+z výsledku složí větu. Dotaz do SQLite mezi nimi trvá **0,1 až 0,5 ms** na 7029
+řádcích, protože tabulka má indexy na příjmení, město i obor a fuzzy skóre se
+počítá až nad tím, co projde filtrem. Ve storu tedy zrychlovat nemá co.
 
-Čtyři podezřelé jsem proměřil a tři z nich to nejsou (detaily v
-[DECISIONS.md](DECISIONS.md) §8): jiný model (Sonnet stejně rychlý a méně
+Čtyři podezřelé jsem proměřil, tři z nich to nejsou (detaily v
+[DECISIONS.md](DECISIONS.md) §8): jiný model (Sonnet stejně rychlý a míň
 spolehlivý, Haiku výrazně pomalejší), `effort` (5980 proti 5968 ms), thinking
-(model ho vygeneroval 0 až 19 tokenů) ani prompt cache, jejíž efekt zmizel
-v rozptylu. Zmenšení payloadu ubralo 7309 → 7132 ms, tedy skoro nic, ale zadarmo.
+(model ho vygeneroval 0 až 19 tokenů) ani prompt cache, jejíž efekt se ztratil
+v rozptylu. Menší payload ubral 7309 → 7132 ms, skoro nic, ale zadarmo.
 
-Co bych zkusil, seřazené podle toho, kolik od čeho čekám. Nic z toho zatím
-změřené není, proto je to seznam pokusů, ne řešení.
+Co bych zkusil dál, od nejnadějnějšího. Nic z toho jsem neměřil, takže to jsou
+nápady, ne řešení.
 
 1. **Streamovat do TTS.** První token je za 2,1 s, ale volající dnes čeká na celou
    větu. Mluvit ji průběžně sníží vnímanou latenci na ten první token, aniž by se
-   cokoli v agentovi změnilo. Agent už streamuje a TTFT měří, chybí jen runtime.
+   cokoli v agentovi změnilo. Agent už streamuje a TTFT měří, chybí runtime.
 2. **Přehrát přemosťovací větu během hledání.** Agent ji vrací zvlášť jako
    `preamble` („Moment, podívám se") právě proto, aby ji runtime pustil, zatímco
-   běží tool. Hotové na mé straně, čeká na druhou.
-3. **Jedno volání místo dvou.** Jediná strukturální páka, která zbývá. Šlo by
-   otevřít hovor rovnou deterministickým hledáním nad tím, co volající řekl, a
-   model nechat jen zformulovat větu; souvisí to s tím, co je potřeba udělat kvůli
-   doslovnému předávání přepisu (viz níž), takže by jedna změna mohla vyřešit dvě
-   věci.
+   běží tool. Na mojí straně hotové, taky čeká na runtime.
+3. **Jedno volání místo dvou.** Šlo by otevřít hovor rovnou hledáním nad tím, co
+   volající řekl, a model nechat jen zformulovat větu. Souvisí to s tím, co je
+   stejně potřeba kvůli doslovnému předávání přepisu (viz níž), takže by jedna
+   změna mohla vyřešit dvě věci.
 4. **Zkrátit odpovědi.** Doba generování roste s délkou textu a bot občas přidá
    větu navíc. `LOG_TIMING=1` už vypisuje vstupní i výstupní tokeny na každé
-   volání, takže je to měřitelné hned: nejdřív zjistit, kolik z těch 9 s je
-   výstup druhého volání, a teprve pak řezat prompt.
+   volání, takže se dá nejdřív zjistit, kolik z toho času je výstup druhého
+   volání, a teprve pak něco řezat.
 
-Co naopak nemá smysl zkoušet, protože je to změřené: menší model, `effort`,
-thinking ani prompt cache (viz [DECISIONS.md](DECISIONS.md) §8). A databáze,
-která je o tři řády pod tím, na čem záleží.
+Co zkoušet nemá smysl, protože to je změřené: menší model, `effort`, thinking,
+prompt cache a databáze.
 
 ## Co ukázal plný snapshot
 
@@ -170,7 +166,7 @@ nikdy nekončí na jméně. Kombinace jméno, město a obor jednoznačně rozli�
 6969 z 7029 řádků (99,1 %); zbývajících 60 řádků tvoří 30 dvojic lišících se
 jen telefonem, adresou a jazyky, a na ty se bot ptá jazykem a řekne proč.
 
-Čtyři pasti, tedy pole, která vypadají použitelně a nejsou. Klinik je 42 a měst
+Čtyři pole vypadají použitelně a nejsou. Klinik je 42 a měst
 42 a v plném snapshotu tvoří bijekci: každé město má jednu kliniku a každá
 klinika patří jednomu městu („Clinica {město} Care“). Neznamená to jednu kliniku
 na jednoho lékaře, naopak mnoho lékařů sdílí stejnou kliniku. Otázka na kliniku
@@ -186,8 +182,8 @@ nepoužívá. Jediné opravdu unikátní pole je telefon, 7029 ze 7029.
 
 ### Kolik kandidátů zbyde
 
-Tohle je číslo, které rozhoduje o tom, na co se bot ptá. Sloupec „skupin“ je
-počet různých kombinací v datech, „průměr“ počet lékařů na jednu kombinaci.
+Podle téhle tabulky se bot rozhoduje, na co se doptá. Sloupec „skupin“ je počet
+různých kombinací v datech, „průměr“ počet lékařů na jednu kombinaci.
 
 | dotaz | skupin | průměr kandidátů | max | jednoznačných řádků |
 |---|---:|---:|---:|---:|
@@ -200,7 +196,7 @@ počet různých kombinací v datech, „průměr“ počet lékařů na jednu k
 | křestní + příjmení + město | 6360 | 1,1 | 4 | 5744 (81,7 %) |
 | křestní + příjmení + město + obor | 6999 | 1,0 | 2 | 6969 (99,1 %) |
 
-Co z toho plyne. Samotné příjmení neidentifikuje nikoho, ani v jednom ze 7029
+Samotné příjmení neidentifikuje nikoho, ani v jednom ze 7029
 řádků, takže bot po prvním tahu nikdy nemůže číst kontakt. Nejvíc řeže město,
 z 270 kandidátů na 6,4, proto je první otázka na město. Jazyk je jako filtr
 skoro k ničemu, 270 na 77, a je proto poslední v pořadí otázek. Ani jméno
@@ -235,7 +231,7 @@ ověřit podílem tahů, ve kterých volající na otázku odpoví „nevím“.
 | Rusu | 283 | Matei | 255 |
 | Dobre | 283 | Enache | 256 |
 
-Z toho plyne, na co si dát pozor. Rozložení je skoro rovnoměrné, mezi
+Na co si dát pozor. Rozložení je skoro rovnoměrné, mezi
 nejčastějším a nejvzácnějším příjmením je 17 %, takže žádný dotaz není „snadný"
 a měření na vzorku platí i jinde. Nebezpečné jsou dvojice, které se liší slabikou
 a obě v datech existují: Stan, Stancu a Stanescu, Dumitru a Dumitrescu, Popa
@@ -285,13 +281,14 @@ skóre jména.
 mrtvice končí jedinou větou „Volejte okamžitě 155." Žádné volání nástroje, žádné
 hledání lékaře, nic dalšího.
 
-Není to jen instrukce v promptu, na tom jsme jednou prohráli. Rozpoznané
+Není to jen instrukce v promptu, na tom jsem jednou narazil. Rozpoznané
 formulace se vyhodnotí **před** modelem (`src/emergency.ts`) a vrátí pevnou větu
 bez jediného tokenu; model je druhá vrstva pro to, co seznam nezná, a za ním
 clamp, který jeho emergency odpověď zkrátí na tutéž větu. Seznam cílí na
 kombinace, ne na slova, takže „Děda měl loni mrtvici, hledám neurologa"
 i „krvácení z nosu" pořád vedou na hledání. Falešný poplach je „zavolejte 155",
-falešné ticho je někdo s krvácením u adresáře, a tím směrem je práh nastavený.
+falešné ticho je někdo s krvácením u adresáře, takže práh je nastavený radši
+k planým poplachům.
 Neakutní potíže vedou na nabídku oboru: „Bolest hlavy neumím posoudit ani léčit.
 Můžu vám ale najít neurologa nebo praktického lékaře."
 
@@ -332,10 +329,9 @@ přes agenta. Offline to vypadalo na 31 z 38, živě spadlo 14 ze 43, a na úpln
 jiných věcech. Důvod byl, že model opravoval poškození z přepisu dřív, než ho
 tool uviděl: „Kůži" poslal jako „Kluž", „Santumare" jako „Satu Mare".
 
-Chvíli jsem to považoval za dobrou zprávu a matcher nechal být. Byla to
-unáhlená úvaha. Model ta jména neopravuje z dat (ta nevidí), ale z toho, co
-zná o rumunských jménech z tréninku. Je to hádání z priorů, ne vyhledávání, a
-mělo dva důsledky. Když se trefil, dorazilo do storu čisté jméno se skóre 1,0 a
+Chvíli jsem to bral jako dobrou zprávu a matcher nechal být. To byla chyba.
+Model ta jména neopravuje z dat, ta nevidí, ale z toho, co zná o rumunských
+jménech z tréninku, takže hádá z priorů. Mělo to dva důsledky. Když se trefil, dorazilo do storu čisté jméno se skóre 1,0 a
 větev „slyšel jsem správně?" nevystřelila ani jednou (`confirm_name 0` ve všech
 38 případech). Kdyby se netrefil a opravil na jiné existující rumunské příjmení,
 store by to vzal jako jistotu a bot by bez ptaní pojmenoval špatného lékaře, a
@@ -343,8 +339,8 @@ v evals by to nebylo vidět, protože ve 38 případech se trefil pokaždé.
 
 **Současný návrh je proto opačný: model předává příjmení, křestní jméno a město
 doslova tak, jak zazněla, a hledání vlastní store**, který jediný vidí, jaká
-jména v datech jsou. Tím se pojistka vrací. Opravu měst, kterou model do té doby
-dělal zadarmo, musí od té chvíle umět matcher: města se porovnávají bez mezer, s
+jména v datech jsou. Opravu měst, kterou model do té doby dělal zadarmo, musí od
+té chvíle umět matcher: města se porovnávají bez mezer, s
 nižším prahem než obory, a synonyma jsou vytažená z reálných přepisů (`kuzi`,
 `ploj testi`, `santumare`, `tam je svar`, `botan siker`), ne vymyšlená. Offline
 na 43 přepisech to posunulo 31/7 na 35/3, bez jediného falešného nálezu mezi
@@ -355,9 +351,8 @@ když do storu chodila jména už opravená a skóre se pohybovala u jedničky. 
 doslovným přepisem projde „stane zkus" na 0,579 a bez potvrzení by se přečetlo
 jako fakt. Práh je teď jeden, 0,6, ať volající řekl cokoli dalšího.
 
-**Poslední placený běh: 42/44 (95 %).** Co v něm drží strukturálně a ne jen
-v promptu, je v tabulce úplně nahoře: emergency dispatch, `must_ask`, withheld
-`id`. Zajímavější je to, co drží jen napůl.
+**Poslední placený běh: 42/44 (95 %).** Co v něm drží v kódu a ne jen v promptu,
+je v tabulce nahoře. Zajímavější je to, co drží jen napůl.
 
 **Otevřený bezpečnostní problém, který ten běh našel.** Model může při volání
 nástroje ztratit slovo z vyslovného příjmení. „stane zkus" dorazilo do storu jako
@@ -367,15 +362,13 @@ předchozích bězích potvrzovací větví prošla, takže to není regrese kó
 variance v tom, jak model plní argumenty.
 
 Pravidlo o doslovném předání je v promptu i v eval assertionu (`args_include`),
-takže se na to **přijde**, ale nic tomu strukturálně **nebrání**. Read-back
-pojistka je zatím závislá na tom, že model přepis nezkrátí. Dokud to neplatí v
-kódu, netvrdím, že je ta cesta garantovaná.
+takže se na to přijde, ale nic tomu nebrání. Read-back pojistka zatím stojí na
+tom, že model přepis nezkrátí, a to není záruka.
 
 **Další krok pro pilot:** držet surový úsek přepisu mimo model a počítat jistotu
 pesimisticky: když model jméno zkrátí nebo vymyslí, potvrzení se musí vynutit.
 
-Tři věci, které živý běh vynutil dřív. Bot potvrzoval jména, která vůbec
-nenašel. Pacientovi, který řekl Popescu, nabídl Dumitrescu na 0,31; pod 0,40
+Tři věci vynutil živý běh dřív. Bot potvrzoval jména, která vůbec nenašel. Pacientovi, který řekl Popescu, nabídl Dumitrescu na 0,31; pod 0,40
 teď žádný kandidát není. Pravidlo „nejmenuj jednoho z mnoha" bylo jen v promptu
 a model ho porušil u 186 kandidátů, takže je teď `must_ask` v datech. Přepis
 „restaurace" místo „doktorka" shodil hledání na odmítnutí.
@@ -419,8 +412,8 @@ dorazilo jako „stane". Starší běhy i rozlišení chyby agenta, matcheru, ca
 checkeru jsou v [evals/RUNS.md](evals/RUNS.md), který je zdrojem pravdy pro
 všechna čísla.
 
-Pozor na jmenovatele: 43 je sada surových přepisů pro matcher, 38 byl starý
-agent eval a 44 jsou dnešní behaviorální scénáře pro agenta.
+Ta čísla nejsou ze stejné sady: 43 jsou surové přepisy pro matcher, 38 byl starý
+agent eval a 44 jsou dnešní behaviorální scénáře.
 
 ## Nastavení
 
@@ -466,15 +459,14 @@ npm run doctor -- "Hledám doktora Dumitresku"
 
 ## Co vědomě chybí
 
-Evals jsou z větší části jednotahové; vícetahových je jedenáct, z toho tři
-třítahové, a pokrývají nejdůležitější tok, tedy doptání a kontakt až na
-vyžádání.
+Evals jsou z větší části jednotahové, vícetahových je jedenáct a z toho tři
+třítahové. Pokrývají to podstatné, doptání a kontakt až na vyžádání.
 
-Latence je změřená bez STT a TTS a cíl 1,5 s nesplňuje ani na tah (6,7 s), ani
-na první token (2,1 s). Podrobně výš v sekci o rychlosti.
+Latence je měřená bez STT a TTS a cíl 1,5 s nesplňuje ani na tah (6,7 s), ani na
+první token (2,1 s). Podrobnosti výš.
 
-Bez LangGraph; přerušení toku (potvrzení jména, povinné doptání) řeším flagy
-v tool resultu. V grafu by to byl interrupt s checkpointem, první kandidát na
-přepis.
+LangGraph tu není, přerušení toku (potvrzení jména, povinné doptání) řeším flagy
+v tool resultu. V grafu by to byl interrupt s checkpointem a je to první kandidát
+na přepis.
 
-Chybí shadow mode a monitoring. Obojí patří k pilotu, ne k zadání.
+Shadow mode a monitoring chybí, obojí patří k pilotu.
