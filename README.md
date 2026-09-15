@@ -23,6 +23,7 @@ Předpoklady, otevřené otázky a definice úspěchu jsou v
 | akutní stav vždy „Volejte okamžitě 155." | **splněno deterministicky**, rozpoznané formulace se vyhodnotí před modelem; 3/3 v posledním běhu za 7, 0 a 1 ms |
 | chování na reálných přepisech | **42/44 (95 %)** v posledním placeném běhu |
 | co volající řekl, dorazí do toolu doslova | **otevřené**, model jednou zkrátil `stane zkus` na `stane` a tím obešel potvrzení |
+| odpověď do 1,5 s od konce věty | **nesplněno**, první token za 2,1 s (max 7,0 s), celý tah kolem 9 s |
 | 95 % hovorů vyřízených bez předání člověku | **neměřitelné bez provozu**, containment se dá zjistit až ze shadow modu |
 
 ## 3 min summary
@@ -98,6 +99,31 @@ Nad 277 kandidáty se bot nezeptá na příjmení, které mají všichni stejné
 město, protože to jich vyřadí nejvíc. „Například" v otázce znamená, že možností
 je víc než ty čtyři jmenované, konkrétně 42 měst. Telefon ani adresu nepřečte,
 dokud si o ně volající neřekne; v posledním tahu se jen zeptá, jestli je chce.
+
+## Je to pomalé a vím proč
+
+Cíl z discovery byl **pod 1,5 s** od konce věty do začátku odpovědi. Poslední běh:
+první token za **2,1 s** v průměru, **7,0 s** v nejhorším případě, celý tah kolem
+**9 s**. Cíl splněný není a nechci to schovávat do poznámky pod čarou.
+
+Kde ten čas je. Jeden tah znamená **dvě volání modelu**: první se rozhodne, který
+tool zavolat, druhé z výsledku složí větu. Mezi nimi běží dotaz do SQLite, a ten
+je zanedbatelný: změřeno 0,1 až 0,5 ms na volání nad 7029 řádky. Skoro celý čas
+tedy padne na dvě generování textu za sebou.
+
+Čtyři podezřelé jsem proměřil a tři z nich to nejsou (detaily v
+[DECISIONS.md](DECISIONS.md) §8): jiný model (Sonnet stejně rychlý a méně
+spolehlivý, Haiku výrazně pomalejší), `effort` (5980 proti 5968 ms), thinking
+(model ho vygeneroval 0 až 19 tokenů) ani prompt cache, jejíž efekt zmizel
+v rozptylu. Zmenšení payloadu ubralo 7309 → 7132 ms, tedy skoro nic, ale zadarmo.
+
+Co s tím jde dělat dál. Za prvé streamovat do TTS: první token je za 2,1 s, ale
+volající dnes čeká na celou větu, protože ji nemá kdo mluvit průběžně. Za druhé
+přehrát během hledání přemosťovací větu, kterou agent už vrací zvlášť jako
+`preamble` („Moment, podívám se"); to je hotové na straně agenta a čeká to na
+runtime. Za třetí, a to je jediná strukturální páka, která zbývá, ušetřit jedno
+ze dvou volání, třeba tím, že první tah půjde rovnou do toolu bez rozhodovacího
+kola. Změřené to není, takže to tady netvrdím jako řešení, jen jako další pokus.
 
 ## Co ukázal plný snapshot
 
@@ -405,13 +431,8 @@ Evals jsou z větší části jednotahové; vícetahových je jedenáct, z toho 
 třítahové, a pokrývají nejdůležitější tok, tedy doptání a kontakt až na
 vyžádání.
 
-Latence je změřená bez STT a TTS. V discovery jsem si dal cíl pod 1,5 s od
-konce věty do začátku odpovědi a **ten cíl zatím není splněný**: v posledním běhu
-přišel první token průměrně za 2,1 s (max 7,0 s), celý tah trvá kolem 9 s.
-Čísla v evals jsou za celý hovor, ne za tah. Třítahový případ proto vychází přes
-20 s. Model, effort, velikost payloadu ani prompt cache s tím měřitelně nehnuly;
-zbývá streaming do TTS a přemosťovací věta, kterou zatím žádný runtime
-nepřehrává, protože runtime tu není.
+Latence je změřená bez STT a TTS. Čísla v evals jsou za celý hovor, ne za tah,
+takže třítahový případ vychází přes 20 s.
 
 Bez LangGraph; přerušení toku (potvrzení jména, povinné doptání) řeším flagy
 v tool resultu. V grafu by to byl interrupt s checkpointem, první kandidát na
