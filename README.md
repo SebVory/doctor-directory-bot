@@ -107,9 +107,11 @@ první token za **2,1 s** v průměru, **7,0 s** v nejhorším případě, celý
 **9 s**. Cíl splněný není a nechci to schovávat do poznámky pod čarou.
 
 Kde ten čas je. Jeden tah znamená **dvě volání modelu**: první se rozhodne, který
-tool zavolat, druhé z výsledku složí větu. Mezi nimi běží dotaz do SQLite, a ten
-je zanedbatelný: změřeno 0,1 až 0,5 ms na volání nad 7029 řádky. Skoro celý čas
-tedy padne na dvě generování textu za sebou.
+tool zavolat, druhé z výsledku složí větu. Mezi nimi běží dotaz do SQLite a ten
+je změřeně **0,1 až 0,5 ms** na volání nad 7029 řádky, protože tabulka má indexy
+na příjmení, město i obor a fuzzy skóre se počítá jen nad tím, co projde filtrem.
+Jinými slovy: ve storu žádný čas není a zrychlovat ho nemá co. Celý rozdíl mezi
+9 s a cílem jsou dvě generování textu za sebou.
 
 Čtyři podezřelé jsem proměřil a tři z nich to nejsou (detaily v
 [DECISIONS.md](DECISIONS.md) §8): jiný model (Sonnet stejně rychlý a méně
@@ -117,13 +119,28 @@ spolehlivý, Haiku výrazně pomalejší), `effort` (5980 proti 5968 ms), thinki
 (model ho vygeneroval 0 až 19 tokenů) ani prompt cache, jejíž efekt zmizel
 v rozptylu. Zmenšení payloadu ubralo 7309 → 7132 ms, tedy skoro nic, ale zadarmo.
 
-Co s tím jde dělat dál. Za prvé streamovat do TTS: první token je za 2,1 s, ale
-volající dnes čeká na celou větu, protože ji nemá kdo mluvit průběžně. Za druhé
-přehrát během hledání přemosťovací větu, kterou agent už vrací zvlášť jako
-`preamble` („Moment, podívám se"); to je hotové na straně agenta a čeká to na
-runtime. Za třetí, a to je jediná strukturální páka, která zbývá, ušetřit jedno
-ze dvou volání, třeba tím, že první tah půjde rovnou do toolu bez rozhodovacího
-kola. Změřené to není, takže to tady netvrdím jako řešení, jen jako další pokus.
+Co bych zkusil, seřazené podle toho, kolik od čeho čekám. Nic z toho zatím
+změřené není, proto je to seznam pokusů, ne řešení.
+
+1. **Streamovat do TTS.** První token je za 2,1 s, ale volající dnes čeká na celou
+   větu. Mluvit ji průběžně sníží vnímanou latenci na ten první token, aniž by se
+   cokoli v agentovi změnilo. Agent už streamuje a TTFT měří, chybí jen runtime.
+2. **Přehrát přemosťovací větu během hledání.** Agent ji vrací zvlášť jako
+   `preamble` („Moment, podívám se") právě proto, aby ji runtime pustil, zatímco
+   běží tool. Hotové na mé straně, čeká na druhou.
+3. **Jedno volání místo dvou.** Jediná strukturální páka, která zbývá. Šlo by
+   otevřít hovor rovnou deterministickým hledáním nad tím, co volající řekl, a
+   model nechat jen zformulovat větu; souvisí to s tím, co je potřeba udělat kvůli
+   doslovnému předávání přepisu (viz níž), takže by jedna změna mohla vyřešit dvě
+   věci.
+4. **Zkrátit odpovědi.** Doba generování roste s délkou textu a bot občas přidá
+   větu navíc. `LOG_TIMING=1` už vypisuje vstupní i výstupní tokeny na každé
+   volání, takže je to měřitelné hned: nejdřív zjistit, kolik z těch 9 s je
+   výstup druhého volání, a teprve pak řezat prompt.
+
+Co naopak nemá smysl zkoušet, protože je to změřené: menší model, `effort`,
+thinking ani prompt cache (viz [DECISIONS.md](DECISIONS.md) §8). A databáze,
+která je o tři řády pod tím, na čem záleží.
 
 ## Co ukázal plný snapshot
 
