@@ -166,24 +166,24 @@ nikdy nekončí na jméně. Kombinace jméno, město a obor jednoznačně rozli�
 6969 z 7029 řádků (99,1 %); zbývajících 60 řádků tvoří 30 dvojic lišících se
 jen telefonem, adresou a jazyky, a na ty se bot ptá jazykem a řekne proč.
 
-Čtyři pole vypadají použitelně a nejsou. Klinik je 42 a měst
-42 a v plném snapshotu tvoří bijekci: každé město má jednu kliniku a každá
-klinika patří jednomu městu („Clinica {město} Care“). Neznamená to jednu kliniku
-na jednoho lékaře, naopak mnoho lékařů sdílí stejnou kliniku. Otázka na kliniku
-proto nepřinese nic navíc proti otázce na město a v sadě disambiguačních otázek
-není. Okres je totéž o patro výš: žádné ze 42 měst neleží ve dvou okresech,
-takže z města okres plyne, a okresů je jen 34, protože šest jich pokrývá víc měst
-(Cluj je Cluj-Napoca i Turda). Ptát se na okres tedy odřízne míň než ptát se na
-město a po městě už nepřidá nic. E-mail se odvozuje ze jména a kliniky, takže 616
-skupin lékařů, některé po třech i čtyřech, sdílí schránku; celkem jde o 669 řádků
-nad rámec prvního v každé skupině. Kontakt nese `email_shared` a bot řekne, že
-přímý je telefon. PSČ je náhodné, například v Kluži je 173 různých, proto se
-nepoužívá. Jediné opravdu unikátní pole je telefon, 7029 ze 7029.
+Čtyři pole vypadají použitelně a nejsou:
+
+- **Klinika je město.** 42 klinik, 42 měst, „Clinica {město} Care", každé město
+  právě jedna klinika. Ptát se na kliniku je ptát se na město horšími slovy, mezi
+  disambiguačními otázkami proto není.
+- **Okres je město o patro výš.** Žádné ze 42 měst neleží ve dvou okresech
+  a okresů je jen 34 (Cluj je Cluj-Napoca i Turda), takže řeže míň než město
+  a po městě nepřidá nic.
+- **E-mail se odvozuje ze jména a kliniky**, takže 616 skupin sdílí schránku, přes
+  669 řádků. Kontakt nese `email_shared` a bot řekne, že přímý je telefon.
+- **PSČ je náhodné**, jen v Kluži je jich 173.
+
+Jediné unikátní pole je telefon, 7029 ze 7029.
 
 ### Kolik kandidátů zbyde
 
-Podle téhle tabulky se bot rozhoduje, na co se doptá. Sloupec „skupin“ je počet
-různých kombinací v datech, „průměr“ počet lékařů na jednu kombinaci.
+Podle téhle tabulky se bot rozhoduje, na co se doptá. „Skupin“ je počet různých
+kombinací, „průměr“ počet lékařů na jednu.
 
 | dotaz | skupin | průměr kandidátů | max | jednoznačných řádků |
 |---|---:|---:|---:|---:|
@@ -204,11 +204,10 @@ s městem nestačí vždy: 616 takových skupin má víc než jeden řádek, obv
 s jiným oborem a jiným telefonem. Je to stejné dělení, které sdílí e-mailovou
 schránku.
 
-Pořadí otázek v kódu je město, obor, křestní jméno, jazyk. Křestní jméno přitom
-řeže o kousek líp než obor (9,0 proti 13,5); obor je před ním proto, že na něj
-volající skoro vždycky umí odpovědět, kdežto křestní jméno hledaného lékaře
-často nezná. To je předpoklad z discovery, ne měření, a v pilotu by se dal
-ověřit podílem tahů, ve kterých volající na otázku odpoví „nevím“.
+Pořadí otázek v kódu je město, obor, křestní jméno, jazyk. Křestní jméno řeže
+o kousek líp než obor (9,0 proti 13,5), ale obor je před ním, protože na ten
+volající umí odpovědět skoro vždycky. To je předpoklad z discovery, ne měření;
+v pilotu by ho ověřil podíl otázek, na které přijde „nevím“.
 
 ### Četnosti
 
@@ -240,9 +239,8 @@ vrací `surname_substituted`: volající řekl příjmení ze seznamu, nález ne
 bot to musí říct nahlas a nesmí ho podstrčit. Krátká příjmení jsou na tom nejhůř,
 mají málo trigramů.
 
-Dvě třetiny lékařů (66 %) mluví víc než jedním jazykem, což je druhá polovina
-důvodu, proč je jazyk poslední otázka: nejen že řeže málo, ale ani odpověď
-„mluví maďarsky“ ještě neznamená, že ostatní maďarsky neumí.
+Dvě třetiny lékařů (66 %) mluví víc jazyky, což je druhý důvod, proč je jazyk
+poslední otázka: řeže málo a „mluví maďarsky“ stejně nevylučuje ostatní.
 
 ## Rozhodnutí
 
@@ -304,12 +302,10 @@ berou prázdnou odpověď vždy jako fail. Detekce jmen v out-of-scope případe
 přes hranice slov, ne přes `includes`, jinak by se příjmení „Stan" našlo uvnitř
 slova „stanovit" a případ by padal ze špatného důvodu.
 
-**10. Evals mají vlastní pojistky, protože report se čte hůř než soubor.** Runner
-odmítne start, dokud má některý případ prázdnou utterance, a validuje hodnoty
-`behaviour` proti tabulce. Oboje vzniklo z reálné chyby při stavbě: dva případy,
-o kterých jsem měl za to, že existují, ve skutečnosti chyběly, a jeden nesl
-`behaviour: null`, což by běh shodilo. Nenašlo to čtení shrnutí, našla to
-kontrola samotného souboru.
+**10. Evals mají vlastní pojistky.** Runner odmítne start, když má některý případ
+prázdnou utterance, a validuje hodnoty `behaviour` proti tabulce. Obojí vzniklo
+z chyby při stavbě: dva případy, o kterých jsem si myslel, že existují, chyběly,
+a jeden nesl `behaviour: null`, což by běh shodilo.
 
 **11. Vzorek dat je stratifikovaný, ne náhodný.** Pokrytí se konstruuje: poziční
 výřez ze středu souboru ztratil psychiatrii, a s ní hlavní dvojznačný případ.
