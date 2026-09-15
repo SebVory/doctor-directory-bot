@@ -93,7 +93,9 @@ narazim v navrhu.
   roste, kulha STT nebo transliterace
 - not found - kazdy takovy hovor je kandidat na novy eval
 - latence na tah - cil pod 1,5 s od konce vety do zacatku odpovedi. Merim zatim jen
-  API + DB, bez STT a TTS, a k cili to zatim neni (posledni bezy v evals/RUNS.md).
+  API + DB, bez STT a TTS, a k cili to zatim neni: posledni beh dava 6,7 s na tah
+  a 2,1 s na prvni token. Pozor, runner puvodne tiskl cas za cely hovor, takze to
+  vypadalo na 8,9 s; tah a hovor nejsou tatáž jednotka (evals/RUNS.md).
 - bez produkce jsou evals jen proxy. Kazdy pripad ma definovane chovani (nasel /
   doptal se / potvrdil / nenasel / odmitl / 155 / kontakt), runner vypise skore,
   latenci a rozdeleni vysledku.

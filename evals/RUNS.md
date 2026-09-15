@@ -450,10 +450,22 @@ Conversation latency avg **8878 ms**, max **22206 ms**.
 TTFT avg **2105 ms**, max **7048 ms**, **37 of 44** answers streamed.
 
 That latency average is per case, not per turn, and 11 of the 44 cases are
-multi-turn: 390 639 ms over 58 turns is **6735 ms a turn**, and a single-turn
-case that actually calls the API averages **7578 ms**, worst 13 359. The three
-emergency cases sit in the average at 7, 0 and 1 ms because they never reach the
-API. Recomputed from this log afterwards, no rerun.
+conversations. Derived from this run's raw output afterwards, no rerun: each
+case's ms was taken as one turn where the case is single-turn, and divided by the
+turn count where it is not.
+
+| unit | avg | max | sample |
+|---|---:|---:|---:|
+| turn | **6735 ms** | 13 359 ms | 58 turns |
+| single-turn cases | 6889 ms | 13 359 ms | 33 cases |
+| multi-turn cases, per turn | 6443 ms | 8302 ms | 11 cases / 25 turns |
+| conversation | 8878 ms | 22 206 ms | 44 cases |
+| TTFT | 2105 ms | 7048 ms | 37 streamed |
+
+The three emergency cases sit in the turn average at 7, 0 and 1 ms because the
+pre-model guard answers them without an API call; a single-turn case that does
+call the API averages **7578 ms**. The runner now times each turn and prints the
+three units as separate lines, so the next run states this itself.
 
 ```text
 outcome breakdown (what happened, not what was expected):

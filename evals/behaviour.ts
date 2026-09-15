@@ -75,6 +75,20 @@ export function classify(answer: string, toolCalls: { name: string }[]): Outcome
   return "other";
 }
 
+/**
+ * avg / max / n over a list of measurements.
+ *
+ * Pulled out of the runner because the latency numbers were being read with the
+ * wrong denominator: the runner timed a whole case, and eleven of the cases are
+ * conversations, so its average was per call, not per turn. Now each unit is
+ * summarised separately and says how many samples it has.
+ */
+export function stats(values: readonly number[]): { avg: number; max: number; n: number } {
+  if (values.length === 0) return { avg: 0, max: 0, n: 0 };
+  const total = values.reduce((sum, value) => sum + value, 0);
+  return { avg: Math.round(total / values.length), max: Math.max(...values), n: values.length };
+}
+
 /** Genitive month names, as a date is spoken in Czech ("jedenáctého *září*"). */
 const CZECH_MONTHS_GENITIVE = [
   "ledna", "unora", "brezna", "dubna", "kvetna", "cervna",

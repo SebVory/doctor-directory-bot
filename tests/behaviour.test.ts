@@ -8,6 +8,7 @@ import {
   fold,
   mentionsDate,
   namesADoctor,
+  stats,
 } from "../evals/behaviour.js";
 
 const notFound = (s: string): boolean => BEHAVIOUR_PATTERNS.not_found.test(fold(s));
@@ -185,5 +186,30 @@ describe("findResultMatches", () => {
 
   it("treats an empty spec as satisfied", () => {
     expect(findResultMatches(found("Florin", "Vasilescu", 1), {})).toBe(true);
+  });
+});
+
+describe("stats", () => {
+  it("is empty-safe", () => {
+    expect(stats([])).toEqual({ avg: 0, max: 0, n: 0 });
+  });
+
+  it("reports avg, max and the sample count", () => {
+    expect(stats([1000])).toEqual({ avg: 1000, max: 1000, n: 1 });
+    expect(stats([1000, 2000, 6000])).toEqual({ avg: 3000, max: 6000, n: 3 });
+  });
+
+  it("rounds to whole milliseconds", () => {
+    expect(stats([1, 2]).avg).toBe(2);
+    expect(stats([1, 1, 2]).avg).toBe(1);
+  });
+
+  it("separates per-turn from per-case, which is the bug it exists for", () => {
+    // Two cases: a three-turn conversation at 12 s and a single turn at 6 s.
+    // Per case that averages 9 s and nobody waited 9 s for anything.
+    const caseMs = [12_000, 6_000];
+    const turnMs = [4_000, 4_000, 4_000, 6_000];
+    expect(stats(caseMs)).toEqual({ avg: 9_000, max: 12_000, n: 2 });
+    expect(stats(turnMs)).toEqual({ avg: 4_500, max: 6_000, n: 4 });
   });
 });

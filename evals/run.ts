@@ -22,6 +22,7 @@ import {
   type Outcome,
   classify,
   fold,
+  stats,
 } from "./behaviour.js";
 
 /** Read once from the same snapshot the agent answers from. */
@@ -291,6 +292,9 @@ if (process.argv.includes("--validate-only")) {
   console.log(`${cases.length} cases valid`);
   process.exit(0);
 }
+/** Every individual turn, so latency can be reported per turn as well as per case. */
+const turnDurations: number[] = [];
+
 const results: {
   label: string;
   failures: string[];
@@ -319,7 +323,9 @@ for (const [index, testCase] of runnable.entries()) {
     // "never called on this call", not "not on the last turn".
     const toolCalls: { name: string; input: Record<string, unknown> }[] = [];
     for (const turn of caseTurns(testCase)) {
+      const turnStarted = performance.now();
       const result = await runTurn(turn, history, { trace: false });
+      turnDurations.push(Math.round(performance.now() - turnStarted));
       history = result.messages;
       answer = result.answer;
       preamble = result.preamble;
@@ -373,17 +379,17 @@ for (const result of results) {
 
 const passed = results.filter((r) => r.failures.length === 0).length;
 const score = results.length === 0 ? 0 : passed / results.length;
-const times = results.map((r) => r.ms);
-const avgMs = times.length === 0 ? 0 : Math.round(times.reduce((a, b) => a + b, 0) / times.length);
-const maxMs = times.length === 0 ? 0 : Math.max(...times);
-const ttfts = results.map((r) => r.ttft).filter((t): t is number => t !== null);
-const ttftAvg = ttfts.length === 0 ? 0 : Math.round(ttfts.reduce((a, b) => a + b, 0) / ttfts.length);
-const ttftMax = ttfts.length === 0 ? 0 : Math.max(...ttfts);
-console.log(
-  `\n${passed}/${results.length} passed — ${(score * 100).toFixed(0)}% (threshold ${PASS_THRESHOLD * 100}%)` +
-    ` · conversation ms avg ${avgMs}, max ${maxMs}` +
-    (ttfts.length === 0 ? "" : ` · TTFT avg ${ttftAvg} ms, max ${ttftMax} ms (${ttfts.length} streamed)`),
-);
+
+// Three units, never mixed: one turn is what a caller waits through, one case is
+// a whole conversation and may be three of them, and TTFT is one streamed call.
+const perTurn = stats(turnDurations);
+const perCase = stats(results.map((r) => r.ms));
+const ttft = stats(results.map((r) => r.ttft).filter((t): t is number => t !== null));
+
+console.log(`\n${passed}/${results.length} passed — ${(score * 100).toFixed(0)}% (threshold ${PASS_THRESHOLD * 100}%)`);
+console.log(`  turn ms          avg ${perTurn.avg}, max ${perTurn.max} (${perTurn.n} turns)`);
+console.log(`  conversation ms  avg ${perCase.avg}, max ${perCase.max} (${perCase.n} cases)`);
+if (ttft.n > 0) console.log(`  TTFT ms          avg ${ttft.avg}, max ${ttft.max} (${ttft.n} streamed)`);
 
 console.log("\noutcome breakdown (what happened, not what was expected):");
 for (const outcome of OUTCOMES) {

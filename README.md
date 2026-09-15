@@ -106,12 +106,22 @@ Cíl z discovery byl **pod 1,5 s** od konce věty do začátku odpovědi. Posled
 první token za **2,1 s** v průměru, **7,0 s** v nejhorším případě. Cíl splněný
 není a nechci to schovávat do poznámky pod čarou.
 
-Pozor na jmenovatele, sám jsem si o něj jednou zakopl. Runner měří **celý případ**,
-ne tah, a 11 ze 44 případů je vícetahových, takže průměr 8,9 s z výpisu níž není
-doba jedné odpovědi. Přepočteno na tah: 390 639 ms / 58 tahů = **6,7 s na tah**.
-Jednotahový případ, který opravdu volá API, trvá průměrně **7,6 s** (max 13,4 s);
-tři emergency případy jsou v tom průměru za 7, 0 a 1 ms, protože k API vůbec
-nedojdou.
+Pozor na jmenovatele, sám jsem si o něj jednou zakopl. Runner měřil **celý
+případ**, a 11 ze 44 případů je vícetahových, takže jeho průměr 8,9 s nebyl čas
+jedné odpovědi. Dopočítáno z logu posledního běhu, bez nového volání API:
+
+| jednotka | průměr | max | vzorek |
+|---|---:|---:|---:|
+| **tah** (co čeká volající) | **6,7 s** | 13,4 s | 58 tahů |
+| z toho jednotahové případy | 6,9 s | 13,4 s | 33 případů |
+| z toho vícetahové, na tah | 6,4 s | 8,3 s | 11 případů / 25 tahů |
+| **hovor** (celý případ) | 8,9 s | 22,2 s | 44 případů |
+| **první token** (TTFT) | 2,1 s | 7,0 s | 37 streamovaných |
+
+Tři emergency případy jsou v tom průměru za 7, 0 a 1 ms, protože k API vůbec
+nedojdou; jednotahový případ, který API opravdu volá, vychází na **7,6 s**.
+Runner od téhle chvíle tiskne všechny tři jednotky zvlášť, ať se to příště nedá
+splést.
 
 Kde ten čas je. Jeden tah znamená **dvě volání modelu**: první se rozhodne, který
 tool zavolat, druhé z výsledku složí větu. Mezi nimi běží dotaz do SQLite a ten
@@ -397,6 +407,11 @@ outcome breakdown (what happened, not what was expected):
   other                0
 ```
 
+Latence v tom výpisu je za celý hovor. Na tah, tedy na to, co volající opravdu
+odčeká, to vychází na **6,7 s** (58 tahů) a první token přijde za **2,1 s**; jeden
+tah jsou dvě volání API, jedno vybere tool a druhé složí větu. Runner dnes tiskne
+`turn ms`, `conversation ms` i `TTFT` jako tři samostatné řádky.
+
 Dva červené případy. První je chyba checkeru: bot se zeptal „Řekněte mi prosím
 jméno", což je platné doptání, ale vzor `ask_clarification` rozeznává čtyři tvary
 a rozkazovací způsob mezi nimi není. Druhý je ten popsaný výš: „stane zkus"
@@ -455,8 +470,8 @@ Evals jsou z větší části jednotahové; vícetahových je jedenáct, z toho 
 třítahové, a pokrývají nejdůležitější tok, tedy doptání a kontakt až na
 vyžádání.
 
-Latence je změřená bez STT a TTS. Čísla v evals jsou za celý hovor, ne za tah,
-takže třítahový případ vychází přes 20 s.
+Latence je změřená bez STT a TTS a cíl 1,5 s nesplňuje ani na tah (6,7 s), ani
+na první token (2,1 s). Podrobně výš v sekci o rychlosti.
 
 Bez LangGraph; přerušení toku (potvrzení jména, povinné doptání) řeším flagy
 v tool resultu. V grafu by to byl interrupt s checkpointem, první kandidát na
