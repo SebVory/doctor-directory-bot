@@ -23,7 +23,7 @@ Předpoklady, otevřené otázky a definice úspěchu jsou v
 | akutní stav vždy „Volejte okamžitě 155." | **splněno deterministicky**, rozpoznané formulace se vyhodnotí před modelem; 3/3 v posledním běhu za 7, 0 a 1 ms |
 | chování na reálných přepisech | **42/44 (95 %)** v posledním placeném běhu |
 | co volající řekl, dorazí do toolu doslova | **otevřené**, model jednou zkrátil `stane zkus` na `stane` a tím obešel potvrzení |
-| odpověď do 1,5 s od konce věty | **nesplněno**, první token za 2,1 s (max 7,0 s), celý tah kolem 9 s |
+| odpověď do 1,5 s od konce věty | **nesplněno**, první token za 2,1 s (max 7,0 s), celý tah v průměru 6,7 s |
 | 95 % hovorů vyřízených bez předání člověku | **neměřitelné bez provozu**, containment se dá zjistit až ze shadow modu |
 
 ## 3 min summary
@@ -103,15 +103,22 @@ dokud si o ně volající neřekne; v posledním tahu se jen zeptá, jestli je c
 ## Je to pomalé a vím proč
 
 Cíl z discovery byl **pod 1,5 s** od konce věty do začátku odpovědi. Poslední běh:
-první token za **2,1 s** v průměru, **7,0 s** v nejhorším případě, celý tah kolem
-**9 s**. Cíl splněný není a nechci to schovávat do poznámky pod čarou.
+první token za **2,1 s** v průměru, **7,0 s** v nejhorším případě. Cíl splněný
+není a nechci to schovávat do poznámky pod čarou.
+
+Pozor na jmenovatele, sám jsem si o něj jednou zakopl. Runner měří **celý případ**,
+ne tah, a 11 ze 44 případů je vícetahových, takže průměr 8,9 s z výpisu níž není
+doba jedné odpovědi. Přepočteno na tah: 390 639 ms / 58 tahů = **6,7 s na tah**.
+Jednotahový případ, který opravdu volá API, trvá průměrně **7,6 s** (max 13,4 s);
+tři emergency případy jsou v tom průměru za 7, 0 a 1 ms, protože k API vůbec
+nedojdou.
 
 Kde ten čas je. Jeden tah znamená **dvě volání modelu**: první se rozhodne, který
 tool zavolat, druhé z výsledku složí větu. Mezi nimi běží dotaz do SQLite a ten
 je změřeně **0,1 až 0,5 ms** na volání nad 7029 řádky, protože tabulka má indexy
 na příjmení, město i obor a fuzzy skóre se počítá jen nad tím, co projde filtrem.
 Jinými slovy: ve storu žádný čas není a zrychlovat ho nemá co. Celý rozdíl mezi
-9 s a cílem jsou dvě generování textu za sebou.
+těmi sedmi sekundami a cílem jsou dvě generování textu za sebou.
 
 Čtyři podezřelé jsem proměřil a tři z nich to nejsou (detaily v
 [DECISIONS.md](DECISIONS.md) §8): jiný model (Sonnet stejně rychlý a méně
