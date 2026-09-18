@@ -42,11 +42,25 @@ const BLEEDING = /\bkrvac\w*|\bkrev\b|\bkrvi\b/;
 
 /**
  * The caller is failing to stop the bleeding. The verb has to be there: "nemůžu"
- * on its own is usually about reaching someone, not about a wound. Czech word
- * order is free, so both "nejde to zastavit" and "zastavit to nejde" count.
+ * on its own is usually about reaching someone, not about a wound.
+ *
+ * Czech word order is free, so the failure can come before or after the verb,
+ * and both directions have to list the same failure words. They did not: the
+ * reversed branch was missing "nedaří se" and "nedokážu", so "Nedokážu zastavit
+ * krvácení" dispatched and "Krvácení zastavit nedokážu" did not. One shared
+ * source string now, because keeping two lists in step by hand is what failed.
  */
-const STOP_FAILURE =
-  /\b(nejde|nejdou|nemuz\w*|neda se|nedari se|nedokaz\w*)\b[^.?!]{0,30}\bzastav\w*|\bzastav\w*[^.?!]{0,20}\b(nejde|nejdou|nemuz\w*|neda se)\b|\bnezastav\w*/;
+// Bare stems, because the reflexive "se" moves: "nedaří se to zastavit" and
+// "zastavit se nedaří" are the same sentence with the pronoun on the other side,
+// and the gap around the verb already allows it.
+const FAILS = /(nejde|nejdou|nemuz\w*|nedari\w*|nedokaz\w*|neda\s+se|neda\b)/.source;
+const STOP_FAILURE = new RegExp(
+  [
+    `\\b${FAILS}\\b[^.?!]{0,30}\\bzastav\\w*`,
+    `\\bzastav\\w*[^.?!]{0,20}\\b${FAILS}\\b`,
+    "\\bnezastav\\w*",
+  ].join("|"),
+);
 
 /**
  * The bleeding is what the caller is shopping for, not what is happening.

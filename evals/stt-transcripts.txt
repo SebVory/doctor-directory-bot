@@ -64,8 +64,10 @@ Dobrý den, chci se zeptat, dokolika má paní doktorka, Maria Ionesca? A pokud 
 => Ionescu Maria, hodiny + e-mail | 1 → hodiny a e-mail, víc → ask
 
 Dobrý den, chtěl bych se zeptat, paní doktorka Nikola Čiová, tady od nás z Botosany, jaké, jaké má číslo, prosím?
-=> Chivu Nicolae (muž, onkolog), Botosani, telefon | město zužuje; 1 → telefon, víc → ask; STT: Čiová, Botosany  [OVĚŘ příjmení]
-   pozn.: v Botosani jsou tři Chivu (Nicolae, Ionut, Florin), všichni muži; "Nikola" sedí na Nicolae na 1,000, "Čiová" na Chivu na 0,000
+=> Chivu Nicolae (muž, onkolog), Botosani, telefon | not_found nebo doptání na příjmení; nikdy nepojmenovat lékaře; STT: Čiová, Botosany  [OVĚŘ příjmení]
+   pozn.: cíl vlevo je, koho volající myslel. Vpravo je, co bot může udělat: "Čiová" sedí na Chivu na 0,000,
+   takže s příjmením v dotazu hledání nevrátí nic, i když "Nikola" sedí na Nicolae na 1,000 a město je správně.
+   V Botosani jsou tři Chivu (Nicolae, Ionut, Florin), všichni muži.
 
 Dobrý den, slyšíme se? Chtěl bych se zeptat, na číslo, pana doktora. Stefana Matěje.
 => Matei Stefan, telefon | 1 → telefon, víc → ask; "slyšíme se" ignorovat, pokračovat

@@ -351,6 +351,7 @@ export function findDoctors(query: FindQuery): FindResult {
   // 300 runs) and paid for the extra given-name candidates several times over.
   // The remaining 3.4 ms is the unfiltered SELECT, which is a separate problem.
   const surnameScores = new Map<string, number>();
+  /** Surname similarity for one normalized column value, computed once. */
   const scoreSurname = (norm: string): number => {
     if (surnameNorm === null) return 1;
     const seen = surnameScores.get(norm);
@@ -361,6 +362,7 @@ export function findDoctors(query: FindQuery): FindResult {
   };
 
   const firstScores = new Map<string, number>();
+  /** Best given-name similarity across every candidate base form, computed once. */
   const scoreFirst = (norm: string): number => {
     if (firstCandidates === null) return 1;
     const seen = firstScores.get(norm);
@@ -374,12 +376,37 @@ export function findDoctors(query: FindQuery): FindResult {
     return best;
   };
 
-  const scored = rows.flatMap((row) => {
+  let scored = rows.flatMap((row) => {
     const score = scoreSurname(row.last_name_norm);
     const firstScore = scoreFirst(row.first_name_norm);
     if (firstNorm !== null && firstScore < FIRST_NAME_FLOOR) return [];
     return [{ row, score, firstScore }];
   });
+
+  // An exact hit on a name the data knows wins outright, if there is one.
+  //
+  // Ten pairs of distinct given names here clear the 0.45 floor – Ana pulls in
+  // Diana at 0.500, Maria pulls Daria at 0.667, Oana pulls Ioana – so a search
+  // for a name the snapshot knows was counting other people as candidates and
+  // could ask a narrowing question that exists only because of them. None of
+  // those pairs reaches 0.85, so a wrong name was never asserted as fact, but
+  // the count was wrong and the question after it was noise.
+  //
+  // This applies to the declension candidates too, not only to a name the
+  // caller happened to say in the nominative: "Anu" resolves to Ana, and the
+  // Dianas it also reaches are the same noise by a longer route.
+  //
+  // Only when an exact row survives, which is the point. Where nothing matches
+  // exactly the near miss is the most useful thing the store has: "Maria" from
+  // an STT that heard Daria should reach Daria and be read back, not turn into
+  // "nemám".
+  if (firstCandidates !== null) {
+    const exactForms = new Set(firstCandidates.filter((c) => knownFirstNames.has(c)));
+    if (exactForms.size > 0) {
+      const exact = scored.filter((entry) => exactForms.has(entry.row.first_name_norm));
+      if (exact.length > 0) scored = exact;
+    }
+  }
 
   // With a surname, confidence decides. Without one, the best-rated doctor is the
   // most useful thing to read out first.

@@ -462,7 +462,11 @@ describe("firstNameVariants", () => {
     }
   });
 
-  it("keeps the caller's own form first, so a correct name is never outranked", () => {
+  // Ordering only, deliberately: scoreFirst takes the maximum over every
+  // candidate, so position in this list buys nothing. What stops a namesake
+  // outranking the caller's own name is the exact-match preference in the
+  // store, which is asserted there.
+  it("lists the caller's own form first", () => {
     expect(firstNameVariants("alinu")[0]).toBe("alinu");
     expect(firstNameVariants("ana")[0]).toBe("ana");
   });

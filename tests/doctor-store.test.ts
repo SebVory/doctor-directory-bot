@@ -178,6 +178,32 @@ describe("a given name must not substitute a neighbour", () => {
     expect(oana.matches.map((m) => m.first_name)).not.toContain("Ionut");
   });
 
+  it("drops namesakes once the name itself matches exactly", () => {
+    // Ten pairs of distinct given names in the snapshot clear the 0.45 floor:
+    // Ana reaches Diana at 0.500, Maria reaches Daria at 0.667. None reaches
+    // 0.85, so a wrong name was never asserted as fact, but they were counted
+    // as candidates and could produce a narrowing question about nobody.
+    const ana = findDoctors({ first_name: "Ana", surname: "Dumitrescu", limit: 50 });
+    expect(ana.matches.map((m) => m.first_name)).not.toContain("Diana");
+    expect([...new Set(ana.matches.map((m) => m.first_name))]).toEqual(["Ana"]);
+
+    // Same through a case ending: "Anu" resolves to Ana, and the Dianas it
+    // also reaches are the same noise by a longer route.
+    const anu = findDoctors({ first_name: "Anu", surname: "Dumitrescu", limit: 50 });
+    expect([...new Set(anu.matches.map((m) => m.first_name))]).toEqual(["Ana"]);
+  });
+
+  it("keeps the near miss when nothing matches exactly", () => {
+    // The exact-match preference must not turn an STT error into "nemám".
+    // No Ana Stoica in Targoviste in the sample, but there is a Diana, and a
+    // caller whose "Diana" was heard as "Ana" should reach her and have the
+    // name read back — not be told the network has nobody.
+    const nearMiss = findDoctors({ first_name: "Ana", surname: "Stoica", city: "Targoviste" });
+    expect(nearMiss.matches.map((m) => m.first_name)).not.toContain("Ana");
+    expect(nearMiss.matches[0]?.first_name).toBe("Diana");
+    expect(nearMiss.needs_confirmation).toBe(true);
+  });
+
   it("does not widen a given name the data already knows", () => {
     // "Florin" is a name in its own right, so it must not be treated as a
     // declined "Florina" and hand back the wrong person as the top match.
@@ -565,8 +591,21 @@ describe("confirming a misheard name", () => {
 });
 
 describe("dataAsOf", () => {
-  it("reports the snapshot date without running a search", () => {
-    expect(dataAsOf()).toBe(findDoctors({ surname: "Popa" }).data_as_of);
+  it("reads the date straight out of meta", () => {
+    // The expected value used to come from findDoctors(), which made the test
+    // perform the very search its title says is unnecessary — and it would
+    // have kept passing if dataAsOf() had gone back to delegating to it.
+    const db = new Database(process.env["DOCTORS_DB"] ?? "", { readonly: true });
+    try {
+      const meta = db.prepare("SELECT loaded_at FROM meta WHERE id = 1").get() as { loaded_at: string };
+      expect(dataAsOf()).toBe(meta.loaded_at);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("agrees with what a search reports, without being that search", () => {
+    expect(findDoctors({ surname: "Popa" }).data_as_of).toBe(dataAsOf());
   });
 });
 

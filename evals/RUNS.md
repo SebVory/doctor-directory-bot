@@ -605,7 +605,7 @@ That open question is closed: `confirm_name` fired 4 times in the 41/42 run and
 calls. What is unmeasured now is everything in the v1.0 fix round: the narrowed
 emergency guard, Czech case endings on given names, `name_confirmed` and the
 snapshot date in the system prompt. All four were verified offline
-against the snapshot and the 253 tests; none has seen the live model.
+against the snapshot and the test suite; none has seen the live model.
 
 Note on earlier numbers: the follow-up sections in `scripts/stt-report.ts` were
 paired with their setup turn by substring match, so the confirmation and

@@ -61,6 +61,16 @@ type Case = {
     answer_includes?: string[];
     /** Answer must quote the snapshot date, ISO or Czech "D. M. YYYY". */
     answer_includes_data_as_of?: boolean;
+    /**
+     * The answer must name nobody from the snapshot.
+     *
+     * `tool_not_called: "get_doctor_contact"` only says no contact was read
+     * out; it passes an answer that names a doctor as fact off the back of a
+     * search that found nothing or found ten people. This is the assertion
+     * those cases were relying on and did not have, so they could pass for a
+     * reason other than the one their note gives.
+     */
+    names_no_doctor?: boolean;
     /** One entry per turn; null skips that turn. Last-turn checks stay separate. */
     turn_behaviours?: (Exclude<Behaviour, "out_of_scope"> | null)[];
     behaviour?: Behaviour;
@@ -106,7 +116,17 @@ function checkCase(
     last_candidates,
     resolved_includes,
     find_result_includes,
+    names_no_doctor,
   } = testCase.expect;
+
+  if (names_no_doctor === true) {
+    // Raw answer against the capitalised surname, like the out_of_scope check:
+    // folding turns "dobře", the commonest Czech adverb, into "Dobre".
+    const named = namesADoctor(answer, SURNAMES);
+    if (named.length > 0) {
+      failures.push(`names_no_doctor: answer names ${named.join(", ")}`);
+    }
+  }
 
   if (find_result_includes !== undefined) {
     const matched = findResults.some((r) => findResultMatches(r, find_result_includes));
@@ -244,7 +264,32 @@ const KNOWN_TOOLS = new Set(["find_doctors", "get_doctor_contact"]);
 
 // Every assertion is checked against the vocabulary before a single call is
 // billed: a typo in a tool name would otherwise pass silently for ever.
+/**
+ * Every key `checkCase` reads. A typo in a case file is silent otherwise: the
+ * assertion simply never runs, and the case passes while claiming to check
+ * something. Kept next to the destructuring in checkCase — adding one there
+ * and not here fails the validator, which is the point.
+ */
+const KNOWN_EXPECT_KEYS = new Set([
+  "tool",
+  "tool_not_called",
+  "tool_on_turn",
+  "last_candidates",
+  "resolved_includes",
+  "find_result_includes",
+  "args_include",
+  "answer_includes",
+  "answer_includes_data_as_of",
+  "names_no_doctor",
+  "turn_behaviours",
+  "behaviour",
+]);
+
+/** Why this case could not run, or null if it is well formed. */
 function invalid(testCase: Case): string | null {
+  for (const key of Object.keys(testCase.expect)) {
+    if (!KNOWN_EXPECT_KEYS.has(key)) return `unknown expect key ${key}`;
+  }
   const { behaviour, turn_behaviours, tool, tool_not_called, tool_on_turn } = testCase.expect;
   if (behaviour !== undefined && !KNOWN_BEHAVIOURS.has(behaviour)) return `unknown behaviour ${behaviour}`;
   for (const value of turn_behaviours ?? []) {

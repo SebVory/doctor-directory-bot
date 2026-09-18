@@ -31,7 +31,7 @@ připomínek sedělo. Čtyři z nich byly chyby v chování, ne v textu: emergen
 guard posílal na 155 i běžné dotazy se slovem „krvácení", pádové koncovky
 u křestních jmen se četly jako jiný člověk, potvrzení jména nemělo cestu ven
 a dotaz na čerstvost dat spouštěl hledání přes všech 7029 řádků. Všechno je
-opravené a ověřené offline proti snapshotu a 263 testům, ale **proti živému
+opravené a ověřené offline proti snapshotu a 271 testům, ale **proti živému
 modelu to zatím neběželo**, číslo 42/44 výš je z běhu před těmi opravami.
 Podrobně v [DECISIONS.md](DECISIONS.md) §20 a §21.
 
@@ -409,7 +409,7 @@ a model ho porušil u 186 kandidátů, takže je teď `must_ask` v datech. Přep
 ```
 $ npm run typecheck && npm test
   Test Files  5 passed (5)
-       Tests  263 passed (263)
+       Tests  271 passed (271)
    Duration  268ms
 ```
 

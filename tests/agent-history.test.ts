@@ -322,9 +322,18 @@ describe("isEmergencyUtterance", () => {
     "Soused nedýchá.",
     "Poklesl mu koutek a nemůže mluvit.",
     "Silně krvácí a nejde to zastavit.",
-    // Word order is free, so the stopping verb may come before the failure.
+    // Word order is free, so the stopping verb may come before the failure —
+    // and both directions have to list the same failure words. They did not:
+    // "Nedokážu zastavit krvácení" dispatched while "Krvácení zastavit
+    // nedokážu" did not, because the reversed branch was missing two of them.
     "Krvácení zastavit nejde.",
     "Krvácení se nezastavuje.",
+    "Krvácení zastavit nedokážu.",
+    "Nedokážu zastavit krvácení.",
+    "Krvácení zastavit nemůžu.",
+    // The reflexive moves, so the failure word cannot carry it.
+    "Krvácení zastavit se nedaří.",
+    "Nedaří se mi zastavit krvácení.",
     // Heavy bleeding reported, not shopped for.
     "Máma má silné krvácení.",
     // Six that a first version of the narrowing silently dropped. Vetoing on

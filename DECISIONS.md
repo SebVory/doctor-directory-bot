@@ -635,8 +635,36 @@ It also read a transcript line as claiming Laura Dumitrescu in Cluj is a
 paediatrician; the line names no city, and the annotation was loose rather than
 wrong. It is now explicit that "1 → found" holds within an already narrowed set.
 
+**A machine review then found two more, and one of them was the same mistake
+a third time.** The narrowed bleeding rule listed its failure words twice, once
+for each word order, and the two lists had drifted: "Nedokážu zastavit krvácení"
+dispatched, "Krvácení zastavit nedokážu" did not, and neither did "Krvácení
+zastavit se nedaří", because the reflexive pronoun moves and the failure word
+was carrying it. Three times now the emergency guard has been narrowed and lost
+a true positive doing it, which is an argument about the shape of the code
+rather than about any one regex: there is one source string for the failure
+words now, used in both directions, because keeping two lists in step by hand is
+what failed.
+
+The second was the exact-match preference that the comment above claimed and the
+code did not do. Ten pairs of distinct given names here clear the 0.45 floor –
+Ana reaches Diana at 0.500, Maria reaches Daria at 0.667, Oana reaches Ioana –
+so a search for a name the snapshot knows counted other people as candidates and
+could ask a narrowing question about nobody. The review's proposed fix, dropping
+every inexact row, was rejected: where nothing matches exactly the near miss is
+the most useful thing the store has, and a caller whose "Diana" was heard as
+"Ana" should reach her and be read the name back rather than told the network
+has nobody. The preference applies only when an exact row survives, and it
+applies to the declension candidates too, since "Anu" reaching Dianas is the
+same noise by a longer route.
+
+Its other claim, that a namesake could be returned without confirmation, does
+not hold here: the highest score between two distinct given names in this
+snapshot is 0.667, well under the 0.85 read-back bar, and "Florina" – the
+example it gave – is not a name in the data at all.
+
 **Still unmeasured.** None of this has seen the live model. It is offline work
-against the snapshot and 263 tests.
+against the snapshot and 271 tests.
 
 ## 21. "Indexy to řeší" was not true for the commonest query
 
