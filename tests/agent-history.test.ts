@@ -322,6 +322,33 @@ describe("isEmergencyUtterance", () => {
     "Soused nedýchá.",
     "Poklesl mu koutek a nemůže mluvit.",
     "Silně krvácí a nejde to zastavit.",
+    // Word order is free, so the stopping verb may come before the failure —
+    // and both directions have to list the same failure words. They did not:
+    // "Nedokážu zastavit krvácení" dispatched while "Krvácení zastavit
+    // nedokážu" did not, because the reversed branch was missing two of them.
+    "Krvácení zastavit nejde.",
+    "Krvácení se nezastavuje.",
+    "Krvácení zastavit nedokážu.",
+    "Nedokážu zastavit krvácení.",
+    "Krvácení zastavit nemůžu.",
+    // The reflexive moves, so the failure word cannot carry it.
+    "Krvácení zastavit se nedaří.",
+    "Nedaří se mi zastavit krvácení.",
+    "Neumím zastavit krvácení.",
+    // Asking how to stop it is urgent on its own, with no failure word at all.
+    "Jak zastavit krvácení?",
+    // Heavy bleeding reported, not shopped for.
+    "Máma má silné krvácení.",
+    // Six that a first version of the narrowing silently dropped. Vetoing on
+    // any search vocabulary anywhere in the sentence is far too blunt: people
+    // in an emergency say "hledám", "potřebuji" and "nemůžu se dovolat" too.
+    // The veto has to attach to the bleeding, not to the sentence.
+    "Nemůžu se dovolat záchranky, manželka silně krvácí.",
+    "Hledám pomoc, táta silně krvácí.",
+    "Potřebuji doktora, syn silně krvácí z nohy.",
+    "Nemůžu najít nikoho, manžel má silné krvácení.",
+    "Sháním sanitku, silně krvácí.",
+    "Silně krvácí, nemůžu se dovolat na kliniku.",
   ])("dispatches %j", (utterance) => {
     expect(isEmergencyUtterance(utterance)).toBe(true);
     expect(emergencyReason(utterance)).not.toBeNull();
@@ -337,6 +364,18 @@ describe("isEmergencyUtterance", () => {
     "Bolí mě ještě jeden hlava. Co si na to mám vzít?",
     // "krvácení" as a condition someone treats, not one the caller is stopping.
     "Hledám doktora, který léčí krvácení z nosu.",
+    // Three sentences that used to dispatch. "Nemůžu" was matching anywhere in
+    // the sentence, and it is almost always about reaching a person, not about
+    // a wound; "silné krvácení" was matching inside an explicit search. Both
+    // now need the bleeding and the trouble to be about the same thing.
+    "Nemůžu se dovolat paní doktorce, která mi léčí krvácení dásní.",
+    "Nemůžu najít doktora, co léčí krvácení.",
+    "Hledám doktora na silné krvácení při menstruaci.",
+    "Sháním hematologa, mám sklony ke krvácení.",
+    "Potřebuji specialistu na krvácení.",
+    // A doctor who knows how to stop it is a doctor, not an emergency.
+    "Hledám doktora, který umí zastavit krvácení.",
+    "Hledám lékaře na krvácení z nosu.",
     // Numbers are never examined, so 155 in a phone number means nothing here.
     "Číslo ordinace končí 155.",
     "Telefon je +40-243-864-155.",
@@ -345,6 +384,11 @@ describe("isEmergencyUtterance", () => {
     "Do kolika ordinuje doktor Dumitrescu v Kluži?",
     "Hledám kardiologa, mám vysoký tlak.",
     "Můžete panu doktorovi říct, že jsem ho schránil?",
+    // Deliberate, and the most arguable line in the file: past tense wins over a
+    // present-tense sign, so a stroke described as history goes to the search
+    // even when the sentence also says the person cannot speak. The caller who
+    // means it now says "má mrtvici" or "přestal mluvit", and both dispatch.
+    "Táta měl mrtvici a nemůže mluvit.",
   ])("leaves %j to the model", (utterance) => {
     expect(isEmergencyUtterance(utterance)).toBe(false);
     expect(emergencyReason(utterance)).toBeNull();

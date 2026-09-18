@@ -7,6 +7,7 @@ import { DoctorSchema, doctorId, findUnreachableValues, loadSnapshot } from "../
 import {
   CITY_SYNONYMS,
   SPECIALITY_SYNONYMS,
+  firstNameVariants,
   normalize,
   normalizeSurname,
   resolveCity,
@@ -224,6 +225,35 @@ describe("CITY_SYNONYMS", () => {
   it("returns null for a city that is not in the network", () => {
     expect(resolveCity("Ostrava", LOCATIONS)).toBeNull();
   });
+
+  /**
+   * DECISIONS §12 claimed no false positive among nine towns outside the
+   * network. That was a one-off check nothing held in place, and it does not
+   * generalise: over 55 Czech and Slovak place names the 0.55 city floor lets
+   * two through. They are listed rather than fixed, because raising the floor
+   * would cost the mishearings it was lowered for — so the cost of that
+   * threshold is visible here instead of being rediscovered later.
+   */
+  const OUT_OF_NETWORK = [
+    "Praha", "Brno", "Ostrava", "Plzeň", "Liberec", "Olomouc", "Hradec Králové", "Pardubice",
+    "Zlín", "Havířov", "Kladno", "Most", "Opava", "Jihlava", "Teplice", "Karlovy Vary",
+    "Chomutov", "Děčín", "Frýdek-Místek", "Karviná", "Jablonec nad Nisou", "Mladá Boleslav",
+    "Prostějov", "Přerov", "Česká Lípa", "Třebíč", "Třinec", "Tábor", "Znojmo", "Příbram",
+    "Cheb", "Trutnov", "Kolín", "Písek", "Kroměříž", "Šumperk", "Vsetín", "Valašské Meziříčí",
+    "Litvínov", "Nový Jičín", "Bratislava", "Košice", "Prešov", "Žilina", "Nitra",
+    "Banská Bystrica", "Trnava", "Trenčín", "Martin", "Poprad", "Morava", "Slezsko",
+    "Sedmihradsko", "Galanta", "Sibiř",
+  ];
+
+  it("has exactly two known false positives among 55 Czech and Slovak names", () => {
+    const wrong = OUT_OF_NETWORK.map((name) => [name, resolveCity(name, LOCATIONS)] as const).filter(
+      ([, resolved]) => resolved !== null,
+    );
+    expect(wrong).toEqual([
+      ["Galanta", "Galati"],
+      ["Sibiř", "Sibiu"],
+    ]);
+  });
 });
 
 describe("LANGUAGE_SYNONYMS", () => {
@@ -413,5 +443,46 @@ describe("ingest guards", () => {
 
     expect(outcome.ok).toBe(true);
     expect(rowCount(dbPath)).toBe(8);
+  });
+});
+
+describe("firstNameVariants", () => {
+  it("offers the base form behind a Czech case ending", () => {
+    for (const [spoken, base] of [
+      ["alinu", "alina"],
+      ["alino", "alina"],
+      ["aliny", "alina"],
+      ["anu", "ana"],
+      ["oano", "oana"],
+      ["mihaie", "mihai"],
+      ["ionu", "ion"],
+      ["mariu", "maria"],
+    ] as const) {
+      expect(firstNameVariants(spoken)).toContain(base);
+    }
+  });
+
+  // Ordering only, deliberately: scoreFirst takes the maximum over every
+  // candidate, so position in this list buys nothing. What stops a namesake
+  // outranking the caller's own name is the exact-match preference in the
+  // store, which is asserted there.
+  it("lists the caller's own form first", () => {
+    expect(firstNameVariants("alinu")[0]).toBe("alinu");
+    expect(firstNameVariants("ana")[0]).toBe("ana");
+  });
+
+  it("offers the bare stem for endings that add a syllable", () => {
+    // "Andreje" is one letter from "Andrei" once the ending is gone.
+    expect(firstNameVariants("andreje")).toContain("andrej");
+  });
+
+  it("leaves a name ending in a consonant alone", () => {
+    expect(firstNameVariants("florin")).toEqual(["florin"]);
+    expect(firstNameVariants("bogdan")).toEqual(["bogdan"]);
+  });
+
+  it("refuses to chew a short name down to nothing", () => {
+    // Two letters left would match almost anything, so nothing is offered.
+    expect(firstNameVariants("ia")).toEqual(["ia"]);
   });
 });

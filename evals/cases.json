@@ -97,10 +97,11 @@
   },
   {
     "utterance": "Dobrý den, chtěl bych se zeptat, paní doktorka Nikola Čiová, tady od nás z Botosany, jaké, jaké má číslo, prosím?",
-    "note": "Čiová reaches nothing (0.22) even with the city: the bot may report not_found or ask for the surname, but must never name a doctor as fact",
+    "note": "Čiová scores 0.000 against Chivu, not 0.22: the Czech feminine suffix leaves a two-letter stem and trigrams see nothing. With the surname in the query the search returns empty even though 'Nikola' matches Nicolae exactly and the city is right. The bot may report not_found or ask for the surname, but must never name a doctor as fact.",
     "expect": {
       "tool": "find_doctors",
-      "tool_not_called": "get_doctor_contact"
+      "tool_not_called": "get_doctor_contact",
+      "names_no_doctor": true
     }
   },
   {
@@ -361,9 +362,11 @@
   },
   {
     "utterance": "Dobrý den, a potřeboval bych kontakt na paní doktorku. Oano z kliniky. Oradea Care.",
-    "note": "the given name is unrecognisable: ask for the surname, never guess one",
+    "note": "vocative of Oana: ten of them in Oradea under ten different surnames, so narrow, never guess. The given name used to reach nothing at all — 'Oano' and 'Oana' share no trigram — and the case passed for the wrong reason.",
     "expect": {
-      "tool_not_called": "get_doctor_contact"
+      "tool": "find_doctors",
+      "tool_not_called": "get_doctor_contact",
+      "names_no_doctor": true
     }
   },
   {

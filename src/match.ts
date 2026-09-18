@@ -62,7 +62,7 @@ export function normalize(input: string): string {
  * A caller says "doktorka Munteanuová"; the data says "Munteanu".
  *
  * This is surname-only on purpose — folding it into normalize() would eat real
- * Romanian place names ("Craiova" -> "kraj").
+ * Romanian place names ("Craiova" -> "krai").
  */
 export const FEMININE_SUFFIXES: readonly string[] = ["ovou", "ove", "ovy", "ova"];
 
@@ -82,6 +82,47 @@ export function normalizeSurname(input: string): string {
       return word;
     })
     .join(" ");
+}
+
+/** Vowels a Czech case ending can leave at the end of a given name. */
+const FINAL_VOWELS = "aeiouy";
+
+/**
+ * Base forms a declined Czech given name could have come from.
+ *
+ * Trigram Dice is unforgiving about short strings, and Czech declines given
+ * names by changing exactly the last letter — the part trigrams weigh most.
+ * "Alinu" against "Alina" scores 0.817, under the 0.85 that decides whether the
+ * bot reads the name back, so it re-confirmed a name the caller had just said.
+ * Below five letters it is worse than unhelpful: "Anu" and "Ana" share no
+ * trigram at all and score 0.000, under the floor, so the row was dropped and
+ * ten Oanas in Oradea came back as "nemám".
+ *
+ * Stripping the ending the way normalizeSurname() does is not safe here,
+ * because -u, -i and -a are all real endings of Romanian given names and
+ * "Radu" would become "Rad". So nothing is stripped: the final vowel is swapped
+ * for each vowel it could have replaced, and the caller's own form is kept
+ * first. Scoring takes the best candidate, so a wrong guess costs nothing.
+ *
+ * Input must already be normalize()d. Only used when the spoken form is not
+ * itself a name in the data — "Florin" must never be widened into "Florina".
+ */
+export function firstNameVariants(normalized: string): string[] {
+  const out = [normalized];
+  const last = normalized.at(-1) ?? "";
+  if (normalized.length < 3 || !FINAL_VOWELS.includes(last)) return out;
+
+  const stem = normalized.slice(0, -1);
+  if (stem.length < 2) return out;
+
+  for (const vowel of FINAL_VOWELS) {
+    const candidate = stem + vowel;
+    if (!out.includes(candidate)) out.push(candidate);
+  }
+  // "Andreje" -> "Andrej", one letter from "Andrei"; the bare stem covers the
+  // endings that add a syllable rather than replacing one.
+  if (!out.includes(stem)) out.push(stem);
+  return out;
 }
 
 const FIRST3_BONUS = 0.15;

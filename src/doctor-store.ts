@@ -3,7 +3,7 @@
  */
 import Database from "better-sqlite3";
 import { DB_PATH } from "./ingest.js";
-import { normalize, normalizeSurname, resolveCity, resolveLanguage, resolveSpeciality, similarityOfNormalized } from "./match.js";
+import { firstNameVariants, normalize, normalizeSurname, resolveCity, resolveLanguage, resolveSpeciality, similarityOfNormalized } from "./match.js";
 
 /**
  * Below this surname confidence the bot reads the name back before giving out
@@ -169,6 +169,20 @@ export type FindQuery = {
   city?: string;
   language?: string;
   limit?: number;
+  /**
+   * The caller has just confirmed the name that was read back to them.
+   *
+   * Without this the confirmation step has no exit. The model is told to pass
+   * names through verbatim, so the second search after "jo, to je on" sends the
+   * same mangled surname, scores it the same way, and gets needs_confirmation
+   * back again — with the id still withheld. The loop only ended when the model
+   * broke the verbatim rule and typed the corrected name.
+   *
+   * It clears the name doubt and nothing else: several candidates still have to
+   * be narrowed, because agreeing to a surname does not say which of the ten
+   * people carrying it the caller wants.
+   */
+  name_confirmed?: boolean;
 };
 
 export type FindResult = {
@@ -227,6 +241,8 @@ type Store = {
   locations: string[];
   /** Every surname in the snapshot, normalized, so we can tell a real name from a mishearing. */
   surnames: Set<string>;
+  /** Same for given names, so a name the data knows is never widened into another. */
+  firstNames: Set<string>;
   dataAsOf: string;
 };
 
@@ -249,13 +265,17 @@ function store(): Store {
       (db.prepare("SELECT DISTINCT last_name_norm FROM doctors").all() as { last_name_norm: string }[])
         .map((r) => r.last_name_norm),
     );
-    cached = { db, locations, surnames, dataAsOf: loadedAt };
+    const firstNames = new Set(
+      (db.prepare("SELECT DISTINCT first_name_norm FROM doctors").all() as { first_name_norm: string }[])
+        .map((r) => r.first_name_norm),
+    );
+    cached = { db, locations, surnames, firstNames, dataAsOf: loadedAt };
   }
   return cached;
 }
 
 export function findDoctors(query: FindQuery): FindResult {
-  const { db, locations, surnames: knownSurnames, dataAsOf } = store();
+  const { db, locations, surnames: knownSurnames, firstNames: knownFirstNames, dataAsOf } = store();
   const limit = query.limit ?? 3;
 
   const speciality = resolveSpeciality(query.speciality);
@@ -311,12 +331,82 @@ export function findDoctors(query: FindQuery): FindResult {
   const surnameNorm = query.surname === undefined ? null : normalizeSurname(query.surname);
   const firstNorm = query.first_name === undefined ? null : normalize(query.first_name);
 
-  const scored = rows.flatMap((row) => {
-    const score = surnameNorm === null ? 1 : similarityOfNormalized(surnameNorm, row.last_name_norm);
-    const firstScore = firstNorm === null ? 1 : similarityOfNormalized(firstNorm, row.first_name_norm);
+  // A given name the data already knows is taken at its word. Anything else may
+  // be a Czech case ending, so it is scored against the base forms it could have
+  // come from — but only those that are real names here. A hypothesis nobody in
+  // the snapshot is called cannot identify anyone, and loose ones do damage:
+  // "Oano" normalises to "ono", whose bare stem let three Ionuts into the
+  // candidates for Oana at 0.50 and pushed the count from 10 to 14.
+  const firstCandidates =
+    firstNorm === null
+      ? null
+      : knownFirstNames.has(firstNorm)
+        ? [firstNorm]
+        : [firstNorm, ...firstNameVariants(firstNorm).filter((v) => v !== firstNorm && knownFirstNames.has(v))];
+
+  // 7029 rows carry 26 distinct surnames and 30 given names between them, so
+  // scoring per row rebuilt the same trigram sets thousands of times: 7029 calls
+  // cost 9.1 ms, the 26 distinct ones cost 0.66 ms. Memoising on the normalized
+  // column value took a surname-only search from 7.6-8.3 ms to 4.2-4.6 ms (p50,
+  // 300 runs) and paid for the extra given-name candidates several times over.
+  // The remaining 3.4 ms is the unfiltered SELECT, which is a separate problem.
+  const surnameScores = new Map<string, number>();
+  /** Surname similarity for one normalized column value, computed once. */
+  const scoreSurname = (norm: string): number => {
+    if (surnameNorm === null) return 1;
+    const seen = surnameScores.get(norm);
+    if (seen !== undefined) return seen;
+    const value = similarityOfNormalized(surnameNorm, norm);
+    surnameScores.set(norm, value);
+    return value;
+  };
+
+  const firstScores = new Map<string, number>();
+  /** Best given-name similarity across every candidate base form, computed once. */
+  const scoreFirst = (norm: string): number => {
+    if (firstCandidates === null) return 1;
+    const seen = firstScores.get(norm);
+    if (seen !== undefined) return seen;
+    let best = 0;
+    for (const candidate of firstCandidates) {
+      const value = similarityOfNormalized(candidate, norm);
+      if (value > best) best = value;
+    }
+    firstScores.set(norm, best);
+    return best;
+  };
+
+  let scored = rows.flatMap((row) => {
+    const score = scoreSurname(row.last_name_norm);
+    const firstScore = scoreFirst(row.first_name_norm);
     if (firstNorm !== null && firstScore < FIRST_NAME_FLOOR) return [];
     return [{ row, score, firstScore }];
   });
+
+  // An exact hit on a name the data knows wins outright, if there is one.
+  //
+  // Ten pairs of distinct given names here clear the 0.45 floor – Ana pulls in
+  // Diana at 0.500, Maria pulls Daria at 0.667, Oana pulls Ioana – so a search
+  // for a name the snapshot knows was counting other people as candidates and
+  // could ask a narrowing question that exists only because of them. None of
+  // those pairs reaches 0.85, so a wrong name was never asserted as fact, but
+  // the count was wrong and the question after it was noise.
+  //
+  // This applies to the declension candidates too, not only to a name the
+  // caller happened to say in the nominative: "Anu" resolves to Ana, and the
+  // Dianas it also reaches are the same noise by a longer route.
+  //
+  // Only when an exact row survives, which is the point. Where nothing matches
+  // exactly the near miss is the most useful thing the store has: "Maria" from
+  // an STT that heard Daria should reach Daria and be read back, not turn into
+  // "nemám".
+  if (firstCandidates !== null) {
+    const exactForms = new Set(firstCandidates.filter((c) => knownFirstNames.has(c)));
+    if (exactForms.size > 0) {
+      const exact = scored.filter((entry) => exactForms.has(entry.row.first_name_norm));
+      if (exact.length > 0) scored = exact;
+    }
+  }
 
   // With a surname, confidence decides. Without one, the best-rated doctor is the
   // most useful thing to read out first.
@@ -380,7 +470,29 @@ export function findDoctors(query: FindQuery): FindResult {
     topEntry !== undefined &&
     topEntry.row.last_name_norm !== surnameNorm;
 
-  const needs_confirmation = surnameUnsure || firstNameUnsure || surname_substituted;
+  // A confirmed name is no longer the caller's approximation of it — it is the
+  // name on the row that was read back. Clearing the flag alone would be worse
+  // than the deadlock it fixes: "Váselysku" scores under the confirm threshold,
+  // so nothing counts as a confident candidate, must_ask stays false, and the
+  // turn would hand out the id of one arbitrary Vasilescu out of 270. So the
+  // heard name is replaced by the real one and the search runs again, which is
+  // what the caller actually agreed to. The second pass matches exactly, so it
+  // raises no doubt of its own and cannot recurse further.
+  if (query.name_confirmed === true && topEntry !== undefined) {
+    const surnameDiffers = surnameNorm !== null && topEntry.row.last_name_norm !== surnameNorm;
+    const firstDiffers = firstNorm !== null && topEntry.row.first_name_norm !== firstNorm;
+    if (surnameDiffers || firstDiffers) {
+      const { name_confirmed: _confirmed, ...rest } = query;
+      return findDoctors({
+        ...rest,
+        ...(surnameNorm === null ? {} : { surname: topEntry.row.last_name }),
+        ...(firstNorm === null ? {} : { first_name: topEntry.row.first_name }),
+      });
+    }
+  }
+
+  const needs_confirmation =
+    query.name_confirmed !== true && (surnameUnsure || firstNameUnsure || surname_substituted);
 
 
   return {
@@ -394,6 +506,17 @@ export function findDoctors(query: FindQuery): FindResult {
     unresolved,
     data_as_of: dataAsOf,
   };
+}
+
+/**
+ * When the snapshot was loaded, without running a search.
+ *
+ * "Jsou ty údaje aktuální?" used to be answerable only out of a find_doctors
+ * result, so the bot ran a filterless scan over 7029 rows to read one date off
+ * the end of it. The date belongs in the system prompt instead.
+ */
+export function dataAsOf(): string {
+  return store().dataAsOf;
 }
 
 export function getDoctorContact(id: string): DoctorContact | null {

@@ -1,6 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import Database from "better-sqlite3";
 import { afterAll, describe, expect, it } from "vitest";
 
 // DOCTORS_DB is read when ingest.ts evaluates, so it must be set before the
@@ -9,10 +10,10 @@ const dir = mkdtempSync(join(tmpdir(), "store-test-"));
 process.env["DOCTORS_DB"] = join(dir, "doctors.sqlite");
 
 const { DoctorSchema, loadSnapshot } = await import("../src/ingest.js");
-const { CONFIRM_THRESHOLD, DOMINANCE_TRIGGER, SUGGESTION_FLOOR, findDoctors, getDoctorContact } =
+const { CONFIRM_THRESHOLD, DOMINANCE_TRIGGER, SUGGESTION_FLOOR, dataAsOf, findDoctors, getDoctorContact } =
   await import("../src/doctor-store.js");
 const { normalize, similarityOfNormalized } = await import("../src/match.js");
-const { findDoctorsPayload } = await import("../src/doctor-agent.js");
+const { findDoctorsPayload, runTurn } = await import("../src/doctor-agent.js");
 
 const rows = (JSON.parse(readFileSync("./data/data-sample.json", "utf8")) as unknown[]).map((r) =>
   DoctorSchema.parse(r),
@@ -143,10 +144,71 @@ describe("a given name must not substitute a neighbour", () => {
     expect(findDoctors({ surname: "Dumitresku", first_name: "Dáryu" }).matches[0]?.first_name).toBe("Daria");
   });
 
-  it("asks when the given name matched only loosely", () => {
-    const loose = findDoctors({ surname: "Dumitresku", first_name: "Alinu", city: "Kluž" });
-    expect(loose.matches[0]?.first_name).toBe("Alina");
-    expect(loose.needs_confirmation).toBe(true); // 0.817 is under FIRST_NAME_CONFIRM
+  it("does not re-confirm a name the caller pronounced correctly", () => {
+    // This test used to assert the opposite, and it was wrong. Once the model
+    // started passing names through verbatim, the store saw the accusative
+    // "Alinu", scored it 0.817 against "Alina", and read back a name the caller
+    // had just said — a confirmation step bought by nothing but a case ending.
+    const declined = findDoctors({ surname: "Dumitresku", first_name: "Alinu", city: "Kluž" });
+    expect(declined.matches[0]?.first_name).toBe("Alina");
+    expect(declined.needs_confirmation).toBe(false);
+  });
+
+  it("finds short given names that trigrams cannot see through", () => {
+    // "Anu" and "Ana" share no trigram at all, so the row used to fall under
+    // FIRST_NAME_FLOOR and vanish. Ten Oanas in Oradea came back as "nemám".
+    for (const spoken of ["Anu", "Ano", "Any"]) {
+      expect(findDoctors({ surname: "Dumitresku", first_name: spoken }).matches[0]?.first_name).toBe("Ana");
+    }
+    // The transcript case is "Oano z kliniky Oradea Care" — ten Oanas in the
+    // full snapshot, none in the 500-row sample, so the city is left out here
+    // and the vocative is what is under test.
+    const oana = findDoctors({ first_name: "Oano" });
+    expect(oana.matches.length).toBeGreaterThan(0);
+    expect(oana.matches[0]?.first_name).toBe("Oana");
+  });
+
+  it("only considers base forms that are real names here", () => {
+    // "Oano" normalises to "ono" — the transliteration flattens the diphthong —
+    // and its bare stem "on" scores 0.50 against "Ionut", over the floor. A
+    // hypothesis nobody is called cannot identify anyone, so the candidates are
+    // filtered against the snapshot before scoring.
+    const oana = findDoctors({ first_name: "Oano", limit: 50 });
+    expect(oana.matches.length).toBeGreaterThan(0);
+    expect(oana.matches.map((m) => m.first_name)).not.toContain("Ionut");
+  });
+
+  it("drops namesakes once the name itself matches exactly", () => {
+    // Ten pairs of distinct given names in the snapshot clear the 0.45 floor:
+    // Ana reaches Diana at 0.500, Maria reaches Daria at 0.667. None reaches
+    // 0.85, so a wrong name was never asserted as fact, but they were counted
+    // as candidates and could produce a narrowing question about nobody.
+    const ana = findDoctors({ first_name: "Ana", surname: "Dumitrescu", limit: 50 });
+    expect(ana.matches.map((m) => m.first_name)).not.toContain("Diana");
+    expect([...new Set(ana.matches.map((m) => m.first_name))]).toEqual(["Ana"]);
+
+    // Same through a case ending: "Anu" resolves to Ana, and the Dianas it
+    // also reaches are the same noise by a longer route.
+    const anu = findDoctors({ first_name: "Anu", surname: "Dumitrescu", limit: 50 });
+    expect([...new Set(anu.matches.map((m) => m.first_name))]).toEqual(["Ana"]);
+  });
+
+  it("keeps the near miss when nothing matches exactly", () => {
+    // The exact-match preference must not turn an STT error into "nemám".
+    // No Ana Stoica in Targoviste in the sample, but there is a Diana, and a
+    // caller whose "Diana" was heard as "Ana" should reach her and have the
+    // name read back — not be told the network has nobody.
+    const nearMiss = findDoctors({ first_name: "Ana", surname: "Stoica", city: "Targoviste" });
+    expect(nearMiss.matches.map((m) => m.first_name)).not.toContain("Ana");
+    expect(nearMiss.matches[0]?.first_name).toBe("Diana");
+    expect(nearMiss.needs_confirmation).toBe(true);
+  });
+
+  it("does not widen a given name the data already knows", () => {
+    // "Florin" is a name in its own right, so it must not be treated as a
+    // declined "Florina" and hand back the wrong person as the top match.
+    const florin = findDoctors({ surname: "Dumitrescu", first_name: "Florin" });
+    expect(florin.matches[0]?.first_name).toBe("Florin");
   });
 });
 
@@ -492,5 +554,112 @@ describe("snapshot cache", () => {
     const after = findDoctors({ surname: "Dumitresku" });
     expect(after.data_as_of).not.toBe(before.data_as_of);
     expect(after.candidates).toBeLessThanOrEqual(before.candidates);
+  });
+});
+
+describe("confirming a misheard name", () => {
+  it("holds the id back until the name is confirmed", () => {
+    const heard = findDoctors({ surname: "Váselysku", city: "Kluž", speciality: "dětský lékař" });
+    expect(heard.needs_confirmation).toBe(true);
+    expect(heard.matches[0]?.last_name).toBe("Vasilescu");
+  });
+
+  it("lets the caller out of the confirmation loop", () => {
+    // Before name_confirmed existed this was a dead end: the model is told to
+    // pass names through verbatim, so the search after "jo, to je ona" sent
+    // "Váselysku" again and got the same question back, for ever.
+    const confirmed = findDoctors({
+      surname: "Váselysku",
+      city: "Kluž",
+      speciality: "dětský lékař",
+      name_confirmed: true,
+    });
+    expect(confirmed.needs_confirmation).toBe(false);
+    expect(confirmed.matches[0]?.last_name).toBe("Vasilescu");
+  });
+
+  it("re-narrows on the real name instead of picking one of its namesakes", () => {
+    // The dangerous shape. "Váselysku" alone scores under the confirm
+    // threshold, so nothing is a confident candidate and must_ask would stay
+    // false — a confirmation would have released the id of one arbitrary
+    // Vasilescu. Confirming the name means searching for the real one.
+    const confirmed = findDoctors({ surname: "Váselysku", name_confirmed: true });
+    expect(confirmed.needs_confirmation).toBe(false);
+    expect(confirmed.candidates).toBeGreaterThan(1);
+    expect(confirmed.must_ask).toBe(true);
+  });
+});
+
+describe("dataAsOf", () => {
+  it("reads the date straight out of meta", () => {
+    // The expected value used to come from findDoctors(), which made the test
+    // perform the very search its title says is unnecessary — and it would
+    // have kept passing if dataAsOf() had gone back to delegating to it.
+    const db = new Database(process.env["DOCTORS_DB"] ?? "", { readonly: true });
+    try {
+      const meta = db.prepare("SELECT loaded_at FROM meta WHERE id = 1").get() as { loaded_at: string };
+      expect(dataAsOf()).toBe(meta.loaded_at);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("agrees with what a search reports, without being that search", () => {
+    expect(findDoctors({ surname: "Popa" }).data_as_of).toBe(dataAsOf());
+  });
+});
+
+describe("snapshot date in the system prompt", () => {
+  it("is there, so asking how current the data is costs no search", () => {
+    // It used to be readable only off the end of a find_doctors result, so
+    // "jsou ty údaje aktuální?" ran a filterless scan over every row to fetch
+    // one date. Captured from the request rather than asserted on the constant,
+    // because the constant is not what gets sent.
+    let system = "";
+    const recording = {
+      messages: {
+        create: async (params: { system?: unknown }) => {
+          system = JSON.stringify(params.system ?? "");
+          return {
+            id: "msg", type: "message", role: "assistant", model: "test",
+            content: [{ type: "text", text: "Seznam je aktuální." }],
+            stop_reason: "end_turn", usage: {},
+          };
+        },
+      },
+    };
+    return runTurn("Jsou ty údaje aktuální?", [], { trace: false, client: recording as never }).then((result) => {
+      expect(system).toContain(dataAsOf());
+      expect(result.toolCalls).toHaveLength(0);
+    });
+  });
+
+  it("follows the snapshot when it is swapped under a running process", async () => {
+    // The prompt is cached so it stays byte-identical for prompt caching, and
+    // the first version of that cache was built once per process — which is
+    // exactly the trap doctor-store re-reads meta on every query to avoid. A
+    // bot left running over a nightly ingest would have quoted yesterday.
+    const writable = new Database(process.env["DOCTORS_DB"] ?? "");
+    try {
+      writable.prepare("UPDATE meta SET loaded_at = ? WHERE id = 1").run("2099-01-01T00:00:00.000Z");
+    } finally {
+      writable.close();
+    }
+
+    let system = "";
+    const recording = {
+      messages: {
+        create: async (params: { system?: unknown }) => {
+          system = JSON.stringify(params.system ?? "");
+          return {
+            id: "msg", type: "message", role: "assistant", model: "test",
+            content: [{ type: "text", text: "Ano." }],
+            stop_reason: "end_turn", usage: {},
+          };
+        },
+      },
+    };
+    await runTurn("A teď?", [], { trace: false, client: recording as never });
+    expect(system).toContain("2099-01-01");
   });
 });

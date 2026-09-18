@@ -1,110 +1,122 @@
-# discovery - poznamky
+# discovery - notes
 
-Inzenyrsky discovery log k tomuhle cviceni: co jsem o zadani zjistil, co jsem si
-domyslel a co zustalo otevrene. Zmerena rozhodnuti a historie bezu jsou jinde,
-v [DECISIONS.md](DECISIONS.md) a [evals/RUNS.md](evals/RUNS.md).
+Engineering discovery log for this exercise: what I learned about the brief, what
+I filled in myself, and what stayed open. Measured decisions and run history live
+elsewhere, in [DECISIONS.md](DECISIONS.md) and [evals/RUNS.md](evals/RUNS.md).
 
-Nic z toho neni overene s nemocnici, je to jak jsem zadani pochopil ja. Kde jsem
-si neco domyslel, je to napsane jako predpoklad.
+None of this is confirmed with the hospital. It is how I understood the brief.
+Where I filled something in, it is written down as an assumption.
 
-## zadani, jak jsem mu porozumel
+## the brief, as I understood it
 
-- nemocnicni sit, hlasovy bot, pacient vola a hleda doktora
-- je to v podstate verejny adresar, "zlate stranky" - doktori maji kontakt verejne,
-  takze neresim overeni volajiciho, kontakt muze dostat kdokoli
-- bot mluvi cesky, ale doktori jsou Rumuni, Francouzi atd. - musi si poradit s
-  cizimi jmeny tak, jak je cech vyslovi a jak je STT prepise
-- jediny zdroj dat = jeden endpoint, vrati cely seznam v jsonu, odpovida cca 10 minut
-- jina cesta k aktualnim datum neni. Ptal jsem se na integraci opacnym smerem
-  (edit/create na nase REST API pri zmene), odpoved byla, ze nic dalsiho na strane
-  nemocnice nevznikne. Tohle je vsechno, co dostaneme.
-- nabidl jsem i CRUD nebo male UI, kde by si nemocnice doktory editovala sama,
-  treba primo v nasi appce, ale delat by to nechteli, tak jsem to zkratoval
-- LLM ma do dat jen cist, zadne zapisy
-- cerstvost dat: predpokladame jednou denne
-- chybovost: zadne konkretni cislo, "nejaka standardni, na ktere se domluvime"
-- ptal jsem se, jestli linka slouzi cele nemocnici a jestli je pred botem IVR - odpoved:
-  predpokladejme, ze neni, linka je jen na tohle
-- zadani resilo hledani podle prijmeni. Obor + mesto + jazyk jsem pridal az potom,
-  prislo mi to jako prvni vec, kterou realny pacient rekne, kdyz jmeno nezna.
-- snapshot ~7000 zaznamu, ~3 MB
+- hospital network, voice bot, a patient calls looking for a doctor
+- it is essentially a public directory, the "golden pages" - contact details are
+  public, so I am not verifying the caller, anyone may have a contact
+- the bot speaks Czech, but the doctors are Romanian, French and so on - it has to
+  cope with foreign names as a Czech says them and as STT writes them down
+- the only source of data is one endpoint, returns the whole list as JSON, answers
+  in about 10 minutes
+- there is no other route to current data. I asked about integrating the other way
+  round (edit/create against our REST API whenever something changes) and the
+  answer was that nothing further will be built on the hospital's side. This is
+  everything we get.
+- I also offered CRUD or a small UI where the hospital would maintain the doctors
+  itself, possibly inside our own app, but they did not want to, so I dropped it
+- the LLM only reads the data, no writes
+- data freshness: assume once a day
+- error rate: no specific number, "some standard one we agree on"
+- I asked whether the line serves the whole hospital and whether there is an IVR in
+  front of the bot - answer: assume not, the line is only for this
+- the brief was about searching by surname. Speciality, city and language I added
+  afterwards, because they struck me as the first thing a real patient says when
+  they do not know the name.
+- snapshot around 7000 records, about 3 MB
 
-## identita: problem, ktery nemam
+## identity: a problem I do not have
 
-Prvni navrh resil, jak poznat, ze se doktor mezi snapshoty zmenil (jine prijmeni,
-jiny telefon), kdyz data nemaji zadne id. Sel jsem pres porovnavani kombinace
-jmeno + email + telefon az k vektorove databazi, kterou jsem sam zavrhl jako
-drahou na provoz.
+My first design worried about how to tell that a doctor changed between snapshots
+(different surname, different phone) when the data carries no id. I went from
+comparing name + email + phone all the way to a vector database, which I then
+rejected myself as expensive to run.
 
-Ten problem ale vubec nemam. Na doktory se nic nevaze, zadne rezervace, zadna
-historie, takze snapshot se cely prepise a identita se neresi. Otazka, ktera to
-rozhodne, je jedina: *vaze se na doktora nejaky nas vlastni stav?* Dokud je
-odpoved ne, je stabilni id zbytecna prace. Kdyby prislo "a objednejte me", meni to
-cely navrh: vznika stav navazany na konkretniho doktora a identita je najednou
-podstatna.
+I simply do not have that problem. Nothing is attached to a doctor - no bookings,
+no history - so the snapshot is replaced wholesale and identity never comes up.
+One question decides it: *does any state of ours hang off a doctor?* While the
+answer is no, a stable id is wasted work. If "and book me in" ever arrives it
+changes the whole design: state appears that is tied to a specific doctor, and
+identity suddenly matters.
 
-Stejnym smerem miri nalez v datech: 616 skupin, kde stejne jmeno + klinika ma jiny
-obor a jiny telefon. Bud je to jeden clovek na vic mistech, nebo dva lide. Nevim,
-a je to presne duvod, proc identitu nemodelovat (detail v DECISIONS.md).
+A finding in the data points the same way: 616 groups where the same name plus
+clinic carries a different speciality and a different phone. Either that is one
+person in several places or two people. I do not know, and that is exactly why
+identity is not modelled (details in DECISIONS.md).
 
-Druha vec do priste: na cerstvost dat a chybovost se ptat hned, ne az kdyz na ne
-narazim v navrhu.
+One thing for next time: ask about data freshness and error tolerance up front,
+rather than when the design walks into them.
 
-## predpoklady, ktere bych overoval
+## assumptions I would verify
 
-- denni cron staci -> overit, jak casto se seznam realne meni; pri tydenni zmene
-  staci tydenni davka
-- chybovost -> potrebuju vedet, co je horsi: nenajit existujiciho doktora, nebo dat
-  spatny telefon. Podle toho se nastavuje prah, kdy se bot doptava na jmeno.
-- objem hovoru -> kolik hovoru denne a jake spicky; rozhoduje, jestli staci sqlite
-  a jeden proces
-- kam predat hovor, kdyz bot nenajde nebo si neni jisty - recepce? nikam?
-- akutni priznaky -> bot rekne "Volejte okamzite 155" a nic dalsiho. V zadani to
-  nebylo, dal jsem to tam ze zdraveho rozumu. Dnes to neni jen instrukce v promptu,
-  ale deterministicke pravidlo v kodu (`src/emergency.ts`); nemocnice ale muze mit
-  vlastni postup, treba prepojeni na urgent, a ten by mel vyhrat.
+- a daily cron is enough -> check how often the list really changes; if it moves
+  weekly, a weekly batch will do
+- error tolerance -> I need to know which is worse: failing to find a doctor who
+  exists, or handing out the wrong phone number. That sets the threshold at which
+  the bot asks about the name.
+- call volume -> how many calls a day and what the peaks look like; it decides
+  whether SQLite and a single process are enough
+- where to hand the call off when the bot finds nothing or is unsure - reception?
+  nowhere?
+- acute symptoms -> the bot says "Volejte okamžitě 155." and nothing else. It was
+  not in the brief, I added it out of common sense. Today it is not just a prompt
+  instruction but a deterministic rule in code (`src/emergency.ts`); the hospital
+  may well have its own procedure, a transfer to urgent care say, and that should
+  win.
 
-## otevrene otazky pred pilotem
+## open questions before a pilot
 
-- kam ma bot predat hovor, kdyz nenajde? existuje recepce?
-- co se ma stat po "Volejte okamzite 155" - zavesit? prepojit?
-- mate nahravky hovoru? Realne zkomoleniny jmen jsou pro evals cennejsi nez
-  vymyslene; zatim jsem pouzil 43 vlastnich diktovanych prepisu (`evals/stt-transcripts.txt`)
-- kolik hovoru denne je "hledam doktora" a jak dlouho to dnes trva recepci
-- jak dnes merite, ze pacient dostal, co chtel
-- jsou v seznamu doktori, kteri se nemaji nabizet (dlouhodobe pryc, jen na doporuceni)?
-- jazyky - staci filtr "mluvi francouzsky", nebo ma bot umet prepnout jazyk?
+- where should the bot transfer a call it cannot answer? is there a reception desk?
+- what should happen after "Volejte okamžitě 155." - hang up? transfer?
+- do you have call recordings? Real manglings of names are worth more for evals
+  than invented ones; so far I have used 43 of my own dictated transcripts
+  (`evals/stt-transcripts.txt`)
+- how many calls a day are "I am looking for a doctor", and how long does that take
+  reception today
+- how do you measure today that the patient got what they wanted
+- are there doctors in the list who should not be offered (away long term, by
+  referral only)?
+- languages - is a "speaks French" filter enough, or should the bot switch language?
 
-## co je uspech a jak to merim
+## what success is and how I measure it
 
-- uspech = pacient dostane spravneho doktora nebo spravny kontakt bez predani
-  cloveku, a bot pritom nerekne nic, co v datech neni
-- kdyz je kandidatu vic (padesat Novaku), bot se nema ptat na to, co maji vsichni
-  stejne, ale na to, co jich vyradi nejvic: mesto, obor, jmeno. Tohle jsem rikal uz
-  na callu, v kodu je to best_question
-- cil je, aby 95 % hovoru proslo rovnou. Zbytek (prejmenovani, dvojice se stejnym
-  jmenem, divne prepisy) se ladi az z pilotu a shadow modu, ne dopredu
-- containment - podil hovoru vyrizenych bez predani; odhad na start 50-60 %, cil je
-  tech 95 %, je to uzky use case
-- spravnost - podil vyrizenych hovoru, kde byl doktor opravdu ten spravny. Pro me
-  dulezitejsi nez containment: spatny telefon je horsi nez prepojeni. Merit vzorkem
-  hovoru do review queue kazdy tyden.
-- kolik hovoru potrebovalo "slysel jsem spravne?" nebo "ktereho myslite?" - kdyz to
-  roste, kulha STT nebo transliterace
-- not found - kazdy takovy hovor je kandidat na novy eval
-- latence na tah - cil pod 1,5 s od konce vety do zacatku odpovedi. Merim zatim jen
-  API + DB, bez STT a TTS, a k cili to zatim neni: posledni beh dava 6,7 s na tah
-  a 2,1 s na prvni token. Pozor, runner puvodne tiskl cas za cely hovor, takze to
-  vypadalo na 8,9 s; tah a hovor nejsou tatáž jednotka (evals/RUNS.md).
-- bez produkce jsou evals jen proxy. Kazdy pripad ma definovane chovani (nasel /
-  doptal se / potvrdil / nenasel / odmitl / 155 / kontakt), runner vypise skore,
-  latenci a rozdeleni vysledku.
-- stejnou tabulku bych chtel z produkce za kazdy hovor: vysledek, pocet tahu,
-  latence, a jestli pacient volal znovu do 24 h (nahrada za FCR, dokud nemam nic
-  lepsiho)
+- success = the patient gets the right doctor or the right contact without being
+  handed to a human, and the bot says nothing that is not in the data
+- when there are several candidates (fifty Nováks), the bot must not ask about what
+  they all share but about what rules out the most: city, speciality, name. I said
+  this on the call already; in the code it is best_question
+- the goal is 95 % of calls going straight through. The rest (renamings, pairs with
+  the same name, strange transcripts) gets tuned from a pilot and shadow mode, not
+  up front
+- containment - the share of calls handled without a transfer; my estimate at the
+  start is 50-60 %, the goal is that 95 %, it is a narrow use case
+- correctness - the share of handled calls where the doctor really was the right
+  one. More important to me than containment: a wrong phone number is worse than a
+  transfer. Measured by sampling calls into a review queue every week.
+- how many calls needed "did I hear that right?" or "which one do you mean?" - when
+  that climbs, STT or the transliteration is limping
+- not found - every such call is a candidate for a new eval
+- latency per turn - the goal is under 1.5 s from the end of the sentence to the
+  start of the answer. So far I only measure API + DB, without STT and TTS, and it
+  is not there: the last run gives 6.7 s per turn and 2.1 s to the first token.
+  Note that the runner originally printed the time for a whole call, which made it
+  look like 8.9 s; a turn and a call are not the same unit (evals/RUNS.md).
+- without production, evals are only a proxy. Every case has a defined behaviour
+  (found / asked / confirmed / not found / refused / 155 / contact), and the runner
+  prints the score, the latency and the distribution of outcomes.
+- I would want the same table out of production for every call: outcome, number of
+  turns, latency, and whether the patient called again within 24 h (a stand-in for
+  FCR until I have something better)
 
-## dalsi krok, kdyby to bylo real
+## next step, if this were real
 
-- shadow mode vedle recepce na realnych hovorech
-- z nich evals postavene na realnych zkomoleninach
-- pilot na jedne lince s review queue, pak rollout
+- shadow mode alongside reception on real calls
+- evals built from those, on real manglings
+- a pilot on one line with a review queue, then rollout

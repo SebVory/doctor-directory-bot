@@ -1,86 +1,101 @@
 # Doctor directory bot
 
-Hlasový bot pro linku nemocniční sítě: pacient zavolá, řekne jméno lékaře nebo
-obor a město, bot ho najde a přečte kontakt. Zadání z pohovoru ve Wonderful.
-Od nemocnice dostaneme jediný endpoint, který vrátí celý seznam a odpovídá
-zhruba deset minut. Žádné webhooky, žádné inkrementální změny, nic jiného.
+A voice bot for a hospital network's phone line: a patient calls, says a doctor's
+name or a speciality and a city, and the bot finds them and reads out the
+contact. An interview exercise for Wonderful. The hospital gives us a single
+endpoint that returns the whole list and takes about ten minutes to answer. No
+webhooks, no incremental changes, nothing else.
 
-Co když se doktor přejmenuje? Nic, na doktory si nic nevážu a snapshot
-přepisuju celý. A jménem by to stejně nešlo: ze 780 celých jmen nepatří žádné
-jen jednomu člověku.
+What if a doctor changes their name? Nothing happens, because nothing of ours is
+attached to a doctor and I replace the snapshot wholesale. It would not work by
+name anyway: of 780 full names, not one belongs to a single person.
 
-Předpoklady, otevřené otázky a definice úspěchu jsou v
-[DISCOVERY.md](DISCOVERY.md), měření a rozhodnutí z nich v
-[DECISIONS.md](DECISIONS.md).
+Assumptions, open questions and the definition of success are in
+[DISCOVERY.md](DISCOVERY.md); the measurements and the decisions that came out of
+them are in [DECISIONS.md](DECISIONS.md).
 
-## Cíl a výsledek
+## Goal and outcome
 
-| co mělo platit | jak to dopadlo |
+| what should hold | how it turned out |
 |---|---|
-| endpoint se během hovoru nevolá | **splněno**, hovor čte jen lokální SQLite snapshot |
-| když kandidátů sedí víc, bot nikdy žádného nepojmenuje | **splněno**, `must_ask` je v datech z toolu, ne v promptu |
-| kontakt nevydat, dokud není identita jistá | **splněno strukturálně**, model u nejistého výsledku nedostane `id`, takže kontakt nemá čím načíst; ověřeno dvěma nátlakovými případy |
-| akutní stav vždy „Volejte okamžitě 155." | **splněno deterministicky**, rozpoznané formulace se vyhodnotí před modelem; 3/3 v posledním běhu za 7, 0 a 1 ms |
-| chování na reálných přepisech | **42/44 (95 %)** v posledním placeném běhu |
-| co volající řekl, dorazí do toolu doslova | **otevřené**, model jednou zkrátil `stane zkus` na `stane` a tím obešel potvrzení |
-| odpověď do 1,5 s od konce věty | **nesplněno**, první token za 2,1 s (max 7,0 s), celý tah v průměru 6,7 s |
-| 95 % hovorů vyřízených bez předání člověku | **neměřitelné bez provozu**, containment se dá zjistit až ze shadow modu |
+| the endpoint is never called during a call | **done**, a call reads only the local SQLite snapshot |
+| when several candidates fit, the bot never names one | **done**, `must_ask` lives in the tool's data, not in the prompt |
+| no contact details until identity is settled | **done structurally**, the model is not given an `id` for an unsettled result, so it has nothing to look the contact up with; verified by two pressure cases |
+| an acute condition always gets „Volejte okamžitě 155." | **done deterministically**, recognised phrasings are decided before the model; 3/3 in the last run, at 7, 0 and 1 ms |
+| behaviour on real transcripts | **42/44 (95 %)** in the last billed run |
+| what the caller said reaches the tool verbatim | **open**, the model once shortened `stane zkus` to `stane` and bypassed the confirmation |
+| an answer within 1.5 s of the end of the sentence | **not done**, first token at 2.1 s (max 7.0 s), a whole turn averages 6.7 s |
+| 95 % of calls handled without a human | **not measurable without traffic**, containment only comes out of shadow mode |
 
-## 3 min summary
+Since that run I have re-read the repository against the data and fixed four
+behavioural bugs: the emergency guard sent ordinary queries containing the word
+"krvácení" to 155, Czech case endings on given names read as a different person,
+confirming a name had no exit, and asking how current the data is triggered a
+search across all 7029 rows. All of it is fixed and verified offline against the
+snapshot and 274 tests, but **none of it has been run against the live model**,
+so the 42/44 above predates the fixes. Details in
+[DECISIONS.md](DECISIONS.md) §20 and §21.
 
-**Co jsem postavil.** Hlasový directory bot nad nemocničním endpointem, který
-vrací celý seznam až za deset minut. Během hovoru endpoint nevolá: plánovaný
-ingest validuje snapshot, atomicky ho prohodí v SQLite a agent nad ním má jen
-dva read-only tooly, hledání a kontakt.
+## Three-minute summary
 
-**Co rozhodla data.** V plném snapshotu na 7029 řádcích není jediné celé jméno
-unikátní. Kvůli tomu jsem zahodil původní nápad porovnávat snapshoty a řešit
-identitu doktora: nic na něj není navázané, takže snapshot přepíšu celý.
-Jméno, město a obor rozliší 6969 řádků z 7029; když zůstane více kandidátů,
-store vybere otázku, která jich vyřadí nejvíc.
+**What I built.** A voice directory bot over a hospital endpoint that takes ten
+minutes to return the whole list. It never calls that endpoint during a call: a
+scheduled ingest validates the snapshot, swaps it atomically into SQLite, and the
+agent gets two read-only tools over it, search and contact.
 
-**Jak jsem to zkoušel.** Do macOS diktování jsem nadiktoval 43 reálných českých
-přepisů, včetně komolených rumunských jmen, rozsekaných měst, češtiny
-s angličtinou a běžných hlasových výplní. Vzniklo z nich 42 ze 44 behaviorálních
-eval cases, zbylé dva jsem psal ručně jako negativní hranice emergency guardu.
-Pouštěl jsem je přes skutečný tool loop, ne jen přes unit testy; historie, syrové
-výsledky a příčiny každé chyby jsou v `evals/RUNS.md`.
+**What the data decided.** Across 7029 rows in the full snapshot, not one full
+name is unique. That killed my original idea of diffing snapshots and tracking a
+doctor's identity: nothing is attached to a doctor, so I replace the snapshot
+whole. Name, city and speciality together separate 6969 of the 7029 rows; when
+more than one candidate is left, the store picks the question that rules out the
+most.
 
-**Jak to dopadlo.** Poslední plný běh skončil 42/44, tedy 95 %. Není to ale těch
-95 % z discovery: cíl mluví o podílu hovorů vyřízených bez předání člověku,
-kdežto eval sada je schválně sbírka těžkých případů, ne vzorek provozu. Dokud
-neběží shadow mode vedle recepce, je eval skóre proxy a containment nemám čím
-změřit.
+**How I tested it.** I dictated 43 real Czech transcripts into macOS dictation,
+including mangled Romanian names, chopped-up city names, Czech mixed with English
+and the usual spoken filler. 42 of the 44 behavioural eval cases came out of
+those; the other two I wrote by hand as negative boundaries for the emergency
+guard. I ran them through the real tool loop, not just unit tests; the history,
+the raw results and the cause of every failure are in `evals/RUNS.md`.
 
-**Kde je limit.** Jeden fail je chyba checkeru, druhý je vážnější: model jednou
-zkrátil `stane zkus` na `stane` ještě před toolem a tím obešel potvrzování jména.
-Evals to zachytily, ale pravidlo o doslovném předání je zatím jen v promptu. Další
-krok pro pilot je držet surový úsek přepisu mimo model a jistotu počítat
-pesimisticky. Hotové to není.
+**How it went.** The last full run finished at 42/44, so 95 %. It is not the 95 %
+from discovery though: that goal is about the share of calls handled without a
+human, whereas the eval set is deliberately a collection of hard cases, not a
+sample of traffic. Until shadow mode runs alongside reception, the eval score is
+a proxy and I have no way to measure containment.
 
-## Kde končí moje část
+**Where the limit is.** One failure is a checker bug; the other is more serious.
+The model once shortened `stane zkus` to `stane` before the tool saw it and
+bypassed the name confirmation. The evals caught it, but the verbatim rule is
+still only in the prompt. The next step for a pilot is to keep the raw span of
+the transcript out of the model and compute confidence pessimistically. It is not
+done.
 
-![Rozdělení na tři části: nemocnice, implementovaná část v repu, platforma Wonderful](docs/ownership-map.svg)
+## Where my part ends
 
-Textem, kdyby se obrázek nenačetl: **nemocnice** je černá skříňka s jediným
-`GET /doctors` (celý JSON, kolem deseti minut) a nic dalšího na své straně
-neudělá, v repu ji zastupuje `mock-hospital-api`. **Implementovaná část** je
-tenhle repozitář: plánovaný ingest do SQLite snapshotu (validace, guardy,
-atomický swap), dva tooly `find_doctors` a `get_doctor_contact` (fuzzy hledání,
-potvrzování jmen, `best_question`) a nad nimi prompt agenta a evals, které
-hlídají chování, ne text. **Platforma Wonderful** dodává telefonii a SIP, STT
-a TTS, orchestrátor a review queue s metrikami; v repu ji zastupuje CLI.
+![Three parts: the hospital, the part implemented in this repo, the Wonderful platform](docs/ownership-map.svg)
 
-Ingest je naplánovaná úloha, dva tooly Skill, prompt konfigurace agenta a evals
-jejich kontrola. Přemosťovací větu („Moment, podívám se") vracím zvlášť od
-odpovědi, aby ji runtime mohl přehrát během tool callu; tam se vnímaná latence
-schovává. Jak často stahovat je řádek v cronu a otázka na nemocnici, ne konstanta
-v kódu.
+In words, in case the image does not load: **the hospital** is a black box with a
+single `GET /doctors` (the whole JSON, around ten minutes) and will build nothing
+further on its side; `mock-hospital-api` stands in for it here. **The implemented
+part** is this repository: a scheduled ingest into a SQLite snapshot (validation,
+guards, atomic swap), two tools `find_doctors` and `get_doctor_contact` (fuzzy
+search, name confirmation, `best_question`), and over them the agent prompt and
+the evals, which check behaviour rather than wording. **The Wonderful platform**
+supplies telephony and SIP, STT and TTS, the orchestrator and a review queue with
+metrics; the CLI stands in for it here.
 
-## Jeden hovor
+The ingest is a scheduled job, the two tools are a Skill, the prompt is agent
+configuration and the evals are the check on it. I return the bridging sentence
+("Moment, podívám se") separately from the answer so the runtime can play it
+during the tool call; that is where perceived latency hides. How often to fetch
+is a line in a cron file and a question for the hospital, not a constant in the
+code.
 
-Doslovný přepis běhu přes agenta z 15. 9. 2026, ze 277 kandidátů na jednoho ve
-třech tazích. Počty vpravo jsou to, co v tom tahu vrátil tool.
+## One call
+
+A verbatim transcript of a run through the agent on 15 September 2026, from 277
+candidates down to one in three turns. The counts on the right are what the tool
+returned on that turn.
 
 ```
 👤 Hledám doktora Dumitresku                         277 kandidátů
@@ -96,132 +111,149 @@ třech tazích. Počty vpravo jsou to, co v tom tahu vrátil tool.
    Care. Přejete si kontakt nebo ordinační hodiny?
 ```
 
-Nad 277 kandidáty se bot nezeptá na příjmení, které mají všichni stejné, ale na
-město, protože to jich vyřadí nejvíc. „Například" v otázce znamená, že možností
-je víc než ty čtyři jmenované, konkrétně 42 měst. Telefon ani adresu nepřečte,
-dokud si o ně volající neřekne; v posledním tahu se jen zeptá, jestli je chce.
+With 277 candidates the bot does not ask about the surname they all share but
+about the city, because that rules out the most. The "například" in the question
+means there are more options than the four named, 42 cities in fact. It reads out
+neither phone nor address until the caller asks; on the last turn it only asks
+whether they want them.
 
-## Latence
+## Latency
 
-V discovery jsem si dal cíl **pod 1,5 s** od konce věty do začátku odpovědi.
-Poslední běh: první token za **2,1 s**, v nejhorším případě **7,0 s**. Cíl tedy
-nesplněný, a je to jediné číslo z discovery, které nevyšlo.
+In discovery I set myself a goal of **under 1.5 s** from the end of the sentence
+to the start of the answer. The last run: first token at **2.1 s**, **7.0 s** in
+the worst case. So the goal is missed, and it is the only number from discovery
+that did not come out.
 
-Runner do teď měřil celý případ, ne tah, a 11 ze 44 případů jsou hovory o dvou
-nebo třech tazích. Jeho průměr 8,9 s tedy nebyl čas jedné odpovědi, což mě
-chvíli mátlo. Dopočítáno z logu posledního běhu, bez nového volání API:
+The runner used to measure a whole case rather than a turn, and 11 of the 44
+cases are conversations of two or three turns. Its average of 8.9 s was therefore
+not the time for one answer, which confused me for a while. Recomputed from the
+log of the last run, with no new API call:
 
-| jednotka | průměr | max | vzorek |
+| unit | average | max | sample |
 |---|---:|---:|---:|
-| **tah** (co čeká volající) | **6,7 s** | 13,4 s | 58 tahů |
-| z toho jednotahové případy | 6,9 s | 13,4 s | 33 případů |
-| z toho vícetahové, na tah | 6,4 s | 8,3 s | 11 případů / 25 tahů |
-| **hovor** (celý případ) | 8,9 s | 22,2 s | 44 případů |
-| **první token** (TTFT) | 2,1 s | 7,0 s | 37 streamovaných |
+| **turn** (what the caller waits for) | **6.7 s** | 13.4 s | 58 turns |
+| of which single-turn cases | 6.9 s | 13.4 s | 33 cases |
+| of which multi-turn, per turn | 6.4 s | 8.3 s | 11 cases / 25 turns |
+| **call** (the whole case) | 8.9 s | 22.2 s | 44 cases |
+| **first token** (TTFT) | 2.1 s | 7.0 s | 37 streamed |
 
-Ty tři emergency případy jsou v průměru za 7, 0 a 1 ms, protože je odbaví guard
-před modelem a k API vůbec nedojdou. Jednotahový případ, který API opravdu volá,
-vychází na **7,6 s**. Runner teď tiskne všechny tři jednotky zvlášť.
+The three emergency cases average 7, 0 and 1 ms, because the pre-model guard
+handles them and they never reach the API. A single-turn case that really does
+call the API comes out at **7.6 s**. The runner now prints all three units
+separately.
 
-Čas je celý ve dvou voláních modelu na jeden tah: první vybere tool, druhé
-z výsledku složí větu. Dotaz do SQLite mezi nimi trvá **0,1 až 0,5 ms** na 7029
-řádcích, protože tabulka má indexy na příjmení, město i obor a fuzzy skóre se
-počítá až nad tím, co projde filtrem. Ve storu tedy zrychlovat nemá co.
+The time is entirely in two model calls per turn: the first picks a tool, the
+second turns the result into a sentence. The SQLite query between them is a
+rounding error against that, but not as small as this file used to claim. With a
+city or a speciality in the filter it runs in **0.2 ms**, because the table is
+indexed on both. With a surname alone there is no `WHERE` at all, because a
+surname is not compared by equality but scored fuzzily in JS across all 7029
+rows. That is the commonest shape of query and it cost **6.9 to 8.3 ms**;
+memoising the score on the 26 distinct surnames brought it to **4.2 to 4.6 ms**,
+and the remaining 3.4 ms is the `SELECT` itself. It is still a thousandth of one
+model call, so the speeding up belongs elsewhere, but "the indexes handle it" was
+not true.
 
-Čtyři podezřelé jsem proměřil, tři z nich to nejsou (detaily v
-[DECISIONS.md](DECISIONS.md) §8): jiný model (Sonnet stejně rychlý a míň
-spolehlivý, Haiku výrazně pomalejší), `effort` (5980 proti 5968 ms), thinking
-(model ho vygeneroval 0 až 19 tokenů) ani prompt cache, jejíž efekt se ztratil
-v rozptylu. Menší payload ubral 7309 → 7132 ms, skoro nic, ale zadarmo.
+I measured four suspects and three of them are not it (details in
+[DECISIONS.md](DECISIONS.md) §8): a different model (Sonnet is the same speed and
+less reliable; Haiku rejected the `effort` parameter outright, so its 16.5 s is
+the SDK retrying rather than Haiku generating, which means I do not know how fast
+Haiku is), `effort` (5980 against 5968 ms), thinking (the model produced 0 to 19
+tokens of it) and the prompt cache, whose effect disappeared into the variance. A
+smaller payload took 7309 → 7132 ms, almost nothing, but free.
 
-Co bych zkusil dál, od nejnadějnějšího. Nic z toho jsem neměřil, takže to jsou
-nápady, ne řešení.
+What I would try next, most promising first. I have measured none of it, so these
+are ideas, not solutions.
 
-1. **Streamovat do TTS.** První token je za 2,1 s, ale volající dnes čeká na celou
-   větu. Mluvit ji průběžně sníží vnímanou latenci na ten první token, aniž by se
-   cokoli v agentovi změnilo. Agent už streamuje a TTFT měří, chybí runtime.
-2. **Přehrát přemosťovací větu během hledání.** Agent ji vrací zvlášť jako
-   `preamble` („Moment, podívám se") právě proto, aby ji runtime pustil, zatímco
-   běží tool. Na mojí straně hotové, taky čeká na runtime.
-3. **Jedno volání místo dvou.** Šlo by otevřít hovor rovnou hledáním nad tím, co
-   volající řekl, a model nechat jen zformulovat větu. Souvisí to s tím, co je
-   stejně potřeba kvůli doslovnému předávání přepisu (viz níž), takže by jedna
-   změna mohla vyřešit dvě věci.
-4. **Zkrátit odpovědi.** Doba generování roste s délkou textu a bot občas přidá
-   větu navíc. `LOG_TIMING=1` už vypisuje vstupní i výstupní tokeny na každé
-   volání, takže se dá nejdřív zjistit, kolik z toho času je výstup druhého
-   volání, a teprve pak něco řezat.
+1. **Stream into TTS.** The first token arrives at 2.1 s, but today the caller
+   waits for the whole sentence. Speaking it as it arrives cuts perceived latency
+   to that first token without changing anything in the agent. The agent already
+   streams and measures TTFT; the runtime is what is missing.
+2. **Play the bridging sentence during the search.** The agent returns it
+   separately as `preamble` ("Moment, podívám se") precisely so the runtime can
+   play it while the tool runs. Done on my side, also waiting on a runtime.
+3. **One call instead of two.** The turn could open by searching on whatever the
+   caller said and leave the model only to phrase the sentence. It overlaps with
+   what is needed anyway for verbatim pass-through (below), so one change could
+   settle two things.
+4. **Shorter answers.** Generation time grows with the length of the text, and the
+   bot sometimes adds a sentence. `LOG_TIMING=1` already prints input and output
+   tokens per call, so it is possible to find out how much of the time is the
+   second call's output before cutting anything.
 
-Co zkoušet nemá smysl, protože to je změřené: menší model, `effort`, thinking,
-prompt cache a databáze.
+Not worth trying, because it has been measured: a smaller model, `effort`,
+thinking, the prompt cache and the database.
 
-## Co ukázal plný snapshot
+## What the full snapshot showed
 
-Následující čísla jsou z plného snapshotu ze zadání; v repu je jen
-stratifikovaný 500řádkový vzorek pro reprodukovatelné testy.
+The numbers below come from the full snapshot in the exercise; the repository
+carries only a stratified 500-row sample for reproducible tests.
 
-7029 lékařů z 26 příjmení a 30 křestních jmen. **Žádné z 780 celých jmen
-nepatří jen jednomu člověku**, nejčastější sdílí dvacet lidí, a proto hledání
-nikdy nekončí na jméně. Kombinace jméno, město a obor jednoznačně rozliší
-6969 z 7029 řádků (99,1 %); zbývajících 60 řádků tvoří 30 dvojic lišících se
-jen telefonem, adresou a jazyky, a na ty se bot ptá jazykem a řekne proč.
+7029 doctors across 26 surnames and 30 given names. **Not one of the 780 full
+names belongs to a single person**, the commonest is shared by twenty, and that
+is why a lookup never ends on a name alone. Name, city and speciality together
+uniquely separate 6969 of the 7029 rows (99.1 %); the remaining 60 rows are 30
+pairs differing only by phone, address and languages, and for those the bot asks
+about language and says why.
 
-Čtyři pole vypadají použitelně a nejsou:
+Four fields look usable and are not:
 
-- **Klinika je město.** 42 klinik, 42 měst, „Clinica {město} Care", každé město
-  právě jedna klinika. Ptát se na kliniku je ptát se na město horšími slovy, mezi
-  disambiguačními otázkami proto není.
-- **Okres je město o patro výš.** Žádné ze 42 měst neleží ve dvou okresech
-  a okresů je jen 34 (Cluj je Cluj-Napoca i Turda), takže řeže míň než město
-  a po městě nepřidá nic.
-- **E-mail se odvozuje ze jména a kliniky**, takže 616 skupin sdílí schránku, přes
-  669 řádků. Kontakt nese `email_shared` a bot řekne, že přímý je telefon.
-- **PSČ je náhodné**, jen v Kluži je jich 173.
+- **The clinic is the city.** 42 clinics, 42 cities, "Clinica {city} Care", one
+  clinic per city exactly. Asking about the clinic is asking about the city in
+  worse words, which is why it is not among the disambiguating questions.
+- **The county is the city one floor up.** None of the 42 cities sits in two
+  counties and there are only 34 counties (Cluj covers both Cluj-Napoca and
+  Turda), so it cuts less than the city and adds nothing after it.
+- **The email is derived from the name and the clinic**, so 1285 rows share a
+  mailbox across 616 groups. The contact carries `email_shared` and the bot says
+  the direct route is the phone.
+- **The postcode is random**, 173 of them in Cluj alone.
 
-Jediné unikátní pole je telefon, 7029 ze 7029.
+The only unique field is the phone number, 7029 out of 7029.
 
-### Kolik kandidátů zbyde
+### How many candidates are left
 
-Podle téhle tabulky se bot rozhoduje, na co se doptá. „Skupin“ je počet různých
-kombinací, „průměr“ počet lékařů na jednu.
+The bot decides what to ask from this table. "Groups" is the number of distinct
+combinations, "average" the number of doctors per group.
 
-| dotaz | skupin | průměr kandidátů | max | jednoznačných řádků |
+| query | groups | average candidates | max | unique rows |
 |---|---:|---:|---:|---:|
-| příjmení | 26 | 270,3 | 291 | 0 |
-| příjmení + jazyk | 182 | 77,3 | 98 | 0 |
-| příjmení + obor | 520 | 13,5 | 23 | 0 |
-| příjmení + křestní jméno | 780 | 9,0 | 20 | 0 |
-| příjmení + město | 1091 | 6,4 | 16 | 13 (0,2 %) |
-| město + obor (bez jména) | 840 | 8,4 | 18 | 0 |
-| křestní + příjmení + město | 6360 | 1,1 | 4 | 5744 (81,7 %) |
-| křestní + příjmení + město + obor | 6999 | 1,0 | 2 | 6969 (99,1 %) |
+| surname | 26 | 270.3 | 291 | 0 |
+| surname + language | 182 | 77.3 | 98 | 0 |
+| surname + speciality | 520 | 13.5 | 23 | 0 |
+| surname + given name | 780 | 9.0 | 20 | 0 |
+| surname + city | 1091 | 6.4 | 16 | 13 (0.2 %) |
+| city + speciality (no name) | 840 | 8.4 | 18 | 0 |
+| given + surname + city | 6360 | 1.1 | 4 | 5744 (81.7 %) |
+| given + surname + city + speciality | 6999 | 1.0 | 2 | 6969 (99.1 %) |
 
-Samotné příjmení neidentifikuje nikoho, ani v jednom ze 7029
-řádků, takže bot po prvním tahu nikdy nemůže číst kontakt. Nejvíc řeže město,
-z 270 kandidátů na 6,4, proto je první otázka na město. Jazyk je jako filtr
-skoro k ničemu, 270 na 77, a je proto poslední v pořadí otázek. Ani jméno
-s městem nestačí vždy: 616 takových skupin má víc než jeden řádek, obvykle
-s jiným oborem a jiným telefonem. Je to stejné dělení, které sdílí e-mailovou
-schránku.
+A surname on its own identifies nobody, in none of the 7029 rows, so the bot can
+never read out a contact after the first turn. The city cuts the most, from 270
+candidates to 6.4, which is why the first question is about the city. Language is
+nearly useless as a filter, 270 down to 77, and is therefore last in the order.
+Even a name with a city is not always enough: 616 such groups hold more than one
+row, usually with a different speciality and a different phone. It is the same
+division that shares an email mailbox.
 
-Pořadí otázek v kódu je město, obor, křestní jméno, jazyk. Křestní jméno řeže
-o kousek líp než obor (9,0 proti 13,5), ale obor je před ním, protože na ten
-volající umí odpovědět skoro vždycky. To je předpoklad z discovery, ne měření;
-v pilotu by ho ověřil podíl otázek, na které přijde „nevím“.
+The order of questions in the code is city, speciality, given name, language. A
+given name cuts slightly better than a speciality (9.0 against 13.5), but
+speciality goes first because a caller can nearly always answer it. That is an
+assumption from discovery, not a measurement; in a pilot the share of questions
+answered with "I don't know" would settle it.
 
-### Četnosti
+### Frequencies
 
-| pole | hodnot | nejčastější | nejvzácnější | medián na hodnotu |
+| field | values | commonest | rarest | median per value |
 |---|---:|---|---|---:|
-| příjmení | 26 | Vasilescu 291 | Nistor 248 | 272 |
-| křestní jméno | 30 | Florin 264 | Alexandru 209 | 232 |
-| město | 42 | Galati 196 | Drobeta-Turnu Severin 141 | 165 |
-| obor | 20 | Infectious Diseases 381 | Neurology 325 | 347 |
-| jazyk | 7 | rumunština 2033 | italština 1979 | 2016 |
+| surname | 26 | Vasilescu 291 | Nistor 248 | 272 |
+| given name | 30 | Florin 264 | Alexandru 209 | 232 |
+| city | 42 | Galati 196 | Drobeta-Turnu Severin 141 | 164 |
+| speciality | 20 | Infectious Diseases 381 | Neurology 325 | 350 |
+| language | 7 | Romanian 2033 | Italian 1979 | 2016 |
 
-Šest nejčastějších a šest nejvzácnějších příjmení z těch 26:
+The six commonest and six rarest of those 26 surnames:
 
-| nejčastější | lékařů | nejvzácnější | lékařů |
+| commonest | doctors | rarest | doctors |
 |---|---:|---|---:|
 | Vasilescu | 291 | Nistor | 248 |
 | Dumitru | 288 | Stan | 250 |
@@ -230,158 +262,206 @@ v pilotu by ho ověřil podíl otázek, na které přijde „nevím“.
 | Rusu | 283 | Matei | 255 |
 | Dobre | 283 | Enache | 256 |
 
-Na co si dát pozor. Rozložení je skoro rovnoměrné, mezi
-nejčastějším a nejvzácnějším příjmením je 17 %, takže žádný dotaz není „snadný"
-a měření na vzorku platí i jinde. Nebezpečné jsou dvojice, které se liší slabikou
-a obě v datech existují: Stan, Stancu a Stanescu, Dumitru a Dumitrescu, Popa
-a Popescu. Přeslech mezi nimi matcher nepozná, obě jména jsou pravá, a proto tool
-vrací `surname_substituted`: volající řekl příjmení ze seznamu, nález nese jiné,
-bot to musí říct nahlas a nesmí ho podstrčit. Krátká příjmení jsou na tom nejhůř,
-mají málo trigramů.
+What to watch out for. The distribution is nearly flat, 17 % between the
+commonest and the rarest surname, so no query is an "easy" one and a measurement
+on a sample holds elsewhere too. The dangerous ones are pairs that differ by a
+syllable and both exist in the data: Stan, Stancu and Stanescu, Dumitru and
+Dumitrescu, Popa and Popescu. The matcher cannot tell a mishearing between them
+apart, both names are real, and that is why the tool returns
+`surname_substituted`: the caller said a surname that is in the list, the hit
+carries a different one, the bot has to say so out loud and must not slip it in.
+Short surnames have it worst, they have few trigrams.
 
-Dvě třetiny lékařů (66 %) mluví víc jazyky, což je druhý důvod, proč je jazyk
-poslední otázka: řeže málo a „mluví maďarsky“ stejně nevylučuje ostatní.
+Two thirds of the doctors (66 %) speak several languages, which is the second
+reason language is the last question: it cuts little, and "speaks Hungarian" does
+not rule the others out anyway.
 
-## Rozhodnutí
+## Decisions
 
-**1. Nemocniční endpoint se nikdy nevolá během hovoru.** Odpovídá v řádu minut,
-takže ingest běží plánovaně mimo hovor a hovor čte jen lokální SQLite snapshot.
-Jak často se stahuje je řádek v cronu a otázka na nemocnici, ne konstanta v kódu.
+**1. The hospital endpoint is never called during a call.** It answers in
+minutes, so the ingest runs on a schedule outside the call and the call reads
+only the local SQLite snapshot. How often it fetches is a line in a cron file and
+a question for the hospital, not a constant in the code.
 
-**2. Snapshot se nahrazuje celý a atomicky, v jedné transakci.** `DROP`, `RENAME`,
-indexy i `meta` jsou uvnitř jednoho `db.transaction(...)`. Když validace neprojde
-nebo počet řádků spadne pod 70 % předchozího, swap se neprovede, zůstává stará
-tabulka a bot umí říct, z kdy data jsou.
+**2. The snapshot is replaced whole and atomically, in one transaction.** `DROP`,
+`RENAME`, the indexes and `meta` all sit inside a single `db.transaction(...)`.
+If validation fails, or the row count drops below 70 % of the previous one, the
+swap does not happen, the old table stays, and the bot can say how old the data
+is.
 
-**3. Identita lékařů se nemodeluje.** 616 skupin sdílí e-mail a některé kandidátní
-skupiny sdílejí stejné jméno i kliniku, ale liší se oborem, telefonem nebo
-adresou. Proto je `id` jen per-snapshot hash, mění se s daty a nic na něj není
-navázané.
+**3. Doctor identity is not modelled.** 616 groups share an email, and some
+candidate groups share a name and a clinic while differing in speciality, phone
+or address. So the `id` is only a per-snapshot hash, it changes with the data,
+and nothing is attached to it.
 
-**4. Příjmení mají vlastní normalizaci.** České `-ová` nestálo správnost, ale
-jistotu: „Rusuová" sedlo na „Rusu" jen na 0,721, tedy pod prahem, takže by se bot
-ptal „slyšel jsem správně?" na jméno, které slyšel perfektně. Odstranění koncovky
-zvedne 24 ze 78 skloňovaných tvarů z pod 0,8 na 1,000. Do obecného `normalize()`
-to nesmí, protože město `Craiova` by se změnilo na `krai`.
+**4. Surnames get their own normalisation.** The Czech `-ová` did not cost
+correctness but confidence: "Rusuová" matched "Rusu" at only 0.721, under the
+threshold, so the bot would ask "did I hear that right?" about a name it had
+heard perfectly. Stripping the suffix lifts 24 of 78 declined forms from below
+0.8 to 1.000. It must not go into the general `normalize()`, because the city
+`Craiova` would turn into `krai`.
 
-**5. Fuzzy hledání je stavěné proti českému STT**, ne proti překlepům: trigramový
-Dice nad transliterační tabulkou, bonus za shodu prvních tří písmen, top 3
-kandidáti. Nad víc kandidáty se bot doptá, pod skóre 0,6 si jméno ověří zpátky.
-Jedna výhrada platí dodnes: ten práh vidí jen to, co mu předá model, a poslední
-běh ukázal, že to nemusí být to, co volající řekl (viz níž).
+**5. The fuzzy search is built against Czech STT**, not against typos: trigram
+Dice over a transliteration table, a bonus for the first three letters matching,
+top 3 candidates. Above that the bot asks; below a score of 0.6 it reads the name
+back. One caveat still stands: that threshold only sees what the model hands it,
+and the last run showed that need not be what the caller said (below).
 
-**6. Obory a města se zadávají česky** přes tabulku synonym a exonym (kardiolog →
-Cardiology, Kluž → Cluj-Napoca). Bez příjmení se řadí podle hodnocení, ne podle
-skóre jména.
+**6. Specialities and cities are given in Czech** through a table of synonyms and
+exonyms (kardiolog → Cardiology, Kluž → Cluj-Napoca). Without a surname, results
+are ordered by rating rather than by name score.
 
-**7. Akutní příznaky mají přednost před vším ostatním.** Bolest na hrudi s dušností,
-čerstvý úraz hlavy, krvácení, které volající nezastaví, bezvědomí nebo příznaky
-mrtvice končí jedinou větou „Volejte okamžitě 155." Žádné volání nástroje, žádné
-hledání lékaře, nic dalšího.
+**7. Acute symptoms take precedence over everything else.** Chest pain with
+breathlessness, a fresh head injury, bleeding the caller cannot stop,
+unconsciousness or signs of a stroke end in a single sentence, „Volejte okamžitě
+155." No tool call, no doctor search, nothing else.
 
-Není to jen instrukce v promptu, na tom jsem jednou narazil. Rozpoznané
-formulace se vyhodnotí **před** modelem (`src/emergency.ts`) a vrátí pevnou větu
-bez jediného tokenu; model je druhá vrstva pro to, co seznam nezná, a za ním
-clamp, který jeho emergency odpověď zkrátí na tutéž větu. Seznam cílí na
-kombinace, ne na slova, takže „Děda měl loni mrtvici, hledám neurologa"
-i „krvácení z nosu" pořád vedou na hledání. Falešný poplach je „zavolejte 155",
-falešné ticho je někdo s krvácením u adresáře, takže práh je nastavený radši
-k planým poplachům.
-Neakutní potíže vedou na nabídku oboru: „Bolest hlavy neumím posoudit ani léčit.
-Můžu vám ale najít neurologa nebo praktického lékaře."
+It is not merely a prompt instruction, which I learned the hard way once.
+Recognised phrasings are decided **before** the model (`src/emergency.ts`) and
+return a fixed sentence without a single token; the model is the second layer for
+what the list does not know, and behind it a clamp shortens its emergency answer
+to the same sentence. The list targets combinations rather than words, so "Děda
+měl loni mrtvici, hledám neurologa" and "krvácení z nosu" still lead to a search.
+A false positive is one "call 155", a false negative is somebody bleeding while
+talking to a directory, so the threshold leans towards the false alarms.
+Non-acute trouble leads to an offer of a speciality: "Bolest hlavy neumím
+posoudit ani léčit. Můžu vám ale najít neurologa nebo praktického lékaře."
 
-**8. Kontakt až na vyžádání.** Telefon ani adresa nejdou do odpovědi samy od
-sebe, jsou za samostatným toolem, který se volá, teprve když si o ně volající
-řekne. Platí to i pro první tah: když se volající zeptal rovnou na číslo nebo
-adresu a vyšel jediný lékař, dostane je hned, jako v případu „Rusu Andreje ze
-Santumare".
+**8. Contact details only on request.** Neither phone nor address goes into an
+answer by itself; they sit behind a separate tool that is called only once the
+caller asks. That holds for the first turn too: if the caller asked straight out
+for a number or an address and exactly one doctor came out, they get it
+immediately, as in the "Rusu Andreje ze Santumare" case.
 
-**9. Prázdná odpověď je chyba, ne edge case.** Strop smyčky, odmítnutí modelu i
-prázdný text končí pevnou českou větou, která volajícímu řekne další krok. Evals
-berou prázdnou odpověď vždy jako fail. Detekce jmen v out-of-scope případech jde
-přes hranice slov, ne přes `includes`, jinak by se příjmení „Stan" našlo uvnitř
-slova „stanovit" a případ by padal ze špatného důvodu.
+**9. An empty answer is a bug, not an edge case.** The loop ceiling, a refusal
+from the model and empty text all end in a fixed Czech sentence that tells the
+caller what to do next. The evals always count an empty answer as a failure. Name
+detection in out-of-scope cases goes through word boundaries rather than
+`includes`, or the surname "Stan" would be found inside the word "stanovit" and
+the case would fail for the wrong reason.
 
-**10. Evals mají vlastní pojistky.** Runner odmítne start, když má některý případ
-prázdnou utterance, a validuje hodnoty `behaviour` proti tabulce. Obojí vzniklo
-z chyby při stavbě: dva případy, o kterých jsem si myslel, že existují, chyběly,
-a jeden nesl `behaviour: null`, což by běh shodilo.
+**10. The evals have guards of their own.** The runner refuses to start if any
+case has an empty utterance, and it validates `behaviour` values against a table
+and rejects unknown `expect` keys. All of it came out of mistakes while building:
+two cases I believed existed were missing, one carried `behaviour: null` which
+would have crashed the run, and a typo in an `expect` key used to be silent, so
+the assertion never ran while the case claimed to check something.
 
-**11. Vzorek dat je stratifikovaný, ne náhodný.** Pokrytí se konstruuje: poziční
-výřez ze středu souboru ztratil psychiatrii, a s ní hlavní dvojznačný případ.
+**11. The data sample is stratified, not random.** Coverage has to be
+constructed: a positional slice from the middle of the file lost Psychiatry, and
+with it the flagship ambiguous case.
 
-**12. Krátká příjmení mají málo trigramů**, takže hůř přežijí přeslech. „Ilije"
-proti „Ilie" bylo 0,000, dokud se neukázalo, že to není limit trigramů, ale
-chybějící řádek v transliterační tabulce; dnes je to 1,000. Co se nespraví, padá
-bezpečně do not_found, tedy na doptání, ne na špatného lékaře.
+**12. Short surnames have few trigrams**, so they survive a mishearing less well.
+"Ilije" against "Ilie" scored 0.000 until it turned out that was not a limit of
+trigrams but a missing row in the transliteration table; today it is 1.000. What
+does not get fixed falls safely into not_found, so into a question rather than
+onto the wrong doctor.
 
-**13. Co vědomě chybí:** shadow mode, monitoring, reálné STT/TTS, rate limiting
-a edge cases, které přinese až pilot.
+**13. Czech case endings are handled in the store, not in the prompt.** Since
+names go to the tool verbatim, the store receives "Alinu", not "Alina". Trigrams
+score that 0.817, under the bar for a read-back, so the bot kept confirming a
+name the caller had just pronounced correctly. For shorter names it is worse:
+"Anu" and "Ana" share no trigram at all, score 0.000, the row falls under the
+floor and ten Oanas in Oradea come back as "nemám". The ending cannot be cut off
+the way it is for surnames, because -u, -i and -a are all real Romanian endings
+and "Radu" would be left as "Rad". The last vowel is therefore swapped for every
+vowel it could have replaced and the best candidate wins. Of 118 case forms of
+the 30 given names in the data, 21 used to fail; now none does.
 
-## Co mě naučily reálné přepisy
+**14. Confirming a name has to have a way out.** Verbatim pass-through means that
+after "jo, to je ona" the tool gets "Váselysku" again, scores it the same, asks
+the same question, and the `id` stays withheld. The only way out was to break the
+rule. `find_doctors` therefore takes `name_confirmed`, and simply clearing the
+flag would have been worse than the deadlock: "Váselysku" is under the confidence
+threshold, so no candidate counts as confident, `must_ask` stays false, and the
+turn would hand out the `id` of one of 291 Vasilescus. Instead the confirmed name
+is replaced by the one the bot read back, and the search runs again.
 
-Pustil jsem 43 skutečných přepisů z macOS diktování přes matcher offline a pak
-přes agenta. Offline to vypadalo na 31 z 38, živě spadlo 14 ze 43, a na úplně
-jiných věcech. Důvod byl, že model opravoval poškození z přepisu dřív, než ho
-tool uviděl: „Kůži" poslal jako „Kluž", „Santumare" jako „Satu Mare".
+**15. An exact match wins when there is one.** Ten pairs of distinct given names
+in the data clear the 0.45 floor: Ana reaches Diana at 0.500, Maria reaches Daria
+at 0.667. A search for a name the snapshot knows was counting other people as
+candidates and could ask a narrowing question about nobody. Only when an exact
+row survives, though: where nothing matches exactly, the near miss is the most
+useful thing the store has, and a caller whose "Diana" was heard as "Ana" should
+reach her and have the name read back rather than be told the network has nobody.
 
-Chvíli jsem to bral jako dobrou zprávu a matcher nechal být. To byla chyba.
-Model ta jména neopravuje z dat, ta nevidí, ale z toho, co zná o rumunských
-jménech z tréninku, takže hádá z priorů. Mělo to dva důsledky. Když se trefil, dorazilo do storu čisté jméno se skóre 1,0 a
-větev „slyšel jsem správně?" nevystřelila ani jednou (`confirm_name 0` ve všech
-38 případech). Kdyby se netrefil a opravil na jiné existující rumunské příjmení,
-store by to vzal jako jistotu a bot by bez ptaní pojmenoval špatného lékaře, a
-v evals by to nebylo vidět, protože ve 38 případech se trefil pokaždé.
+**16. Deliberately missing:** shadow mode, monitoring, real STT/TTS, rate
+limiting, and the edge cases only a pilot will bring.
 
-**Současný návrh je proto opačný: model předává příjmení, křestní jméno a město
-doslova tak, jak zazněla, a hledání vlastní store**, který jediný vidí, jaká
-jména v datech jsou. Opravu měst, kterou model do té doby dělal zadarmo, musí od
-té chvíle umět matcher: města se porovnávají bez mezer, s
-nižším prahem než obory, a synonyma jsou vytažená z reálných přepisů (`kuzi`,
-`ploj testi`, `santumare`, `tam je svar`, `botan siker`), ne vymyšlená. Offline
-na 43 přepisech to posunulo 31/7 na 35/3, bez jediného falešného nálezu mezi
-devíti městy mimo síť a se všemi 42 městy, která pořád trefí sama sebe.
+## What the real transcripts taught me
 
-Se stejnou změnou padl i nižší práh pro potvrzení jména. Byl nastavený na 0,45,
-když do storu chodila jména už opravená a skóre se pohybovala u jedničky. S
-doslovným přepisem projde „stane zkus" na 0,579 a bez potvrzení by se přečetlo
-jako fakt. Práh je teď jeden, 0,6, ať volající řekl cokoli dalšího.
+I ran 43 real macOS dictation transcripts through the matcher offline and then
+through the agent. Offline it looked like 31 of 38; live, 14 of 43 failed, and on
+entirely different things. The reason was that the model repaired the damage from
+the transcript before the tool ever saw it: it sent "Kůži" as "Kluž" and
+"Santumare" as "Satu Mare".
 
-**Poslední placený běh: 42/44 (95 %).** Co v něm drží v kódu a ne jen v promptu,
-je v tabulce nahoře. Zajímavější je to, co drží jen napůl.
+For a while I took that as good news and left the matcher alone. That was a
+mistake. The model is not repairing those names from the data, which it cannot
+see, but from what it knows about Romanian names from training, so it is guessing
+from priors. That had two consequences. When it guessed right, a clean name with
+a score of 1.0 arrived at the store and the "did I hear that right?" branch never
+fired once (`confirm_name 0` across all 38 cases). If it had guessed wrong and
+repaired to a different real Romanian surname, the store would have taken that as
+certainty and the bot would have named the wrong doctor without asking, and the
+evals would not have shown it, because across those 38 cases it guessed right
+every time.
 
-**Otevřený bezpečnostní problém, který ten běh našel.** Model může při volání
-nástroje ztratit slovo z vyslovného příjmení. „stane zkus" dorazilo do storu jako
-„stane": skóre 0,579 → 0,817, `needs_confirmation` se překlopilo na false a bot
-přečetl Vlada Stanesca jako fakt, místo aby se zeptal. Stejná věta ve dvou
-předchozích bězích potvrzovací větví prošla, takže to není regrese kódu, ale
-variance v tom, jak model plní argumenty.
+**The current design is therefore the opposite: the model passes the surname, the
+given name and the city through exactly as they were said, and the store owns the
+searching**, because it is the only thing that can see which names are in the
+data. The city repairs the model had been doing for free now have to be the
+matcher's job: cities are compared without spaces, with a lower threshold than
+specialities, and the synonyms are lifted from real transcripts (`kuzi`,
+`ploj testi`, `santumare`, `tam je svar`, `botan siker`) rather than invented.
+Offline across the 43 transcripts that moved 31/7 to 35/3, with no false positive
+among nine towns outside the network and all 42 real cities still resolving to
+themselves.
 
-Pravidlo o doslovném předání je v promptu i v eval assertionu (`args_include`),
-takže se na to přijde, ale nic tomu nebrání. Read-back pojistka zatím stojí na
-tom, že model přepis nezkrátí, a to není záruka.
+The same change killed the lower threshold for confirming a name. It had been set
+at 0.45, back when names arrived at the store already repaired and scores sat
+near one. With the raw transcript, "stane zkus" comes through at 0.579 and would
+have been read out as fact without a confirmation. There is one bar now, 0.6,
+whatever else the caller gave.
 
-**Další krok pro pilot:** držet surový úsek přepisu mimo model a počítat jistotu
-pesimisticky: když model jméno zkrátí nebo vymyslí, potvrzení se musí vynutit.
+**The last billed run: 42/44 (95 %).** What holds in code rather than only in the
+prompt is in the table at the top. What holds only halfway is more interesting.
 
-Tři věci vynutil živý běh dřív. Bot potvrzoval jména, která vůbec nenašel. Pacientovi, který řekl Popescu, nabídl Dumitrescu na 0,31; pod 0,40
-teď žádný kandidát není. Pravidlo „nejmenuj jednoho z mnoha" bylo jen v promptu
-a model ho porušil u 186 kandidátů, takže je teď `must_ask` v datech. Přepis
-„restaurace" místo „doktorka" shodil hledání na odmítnutí.
+**An open safety problem that run found.** The model can drop a word from a spoken
+surname when it calls the tool. "stane zkus" arrived at the store as "stane": the
+score went 0.579 → 0.817, `needs_confirmation` flipped to false, and the bot read
+out Vlad Stanescu as fact instead of asking. The same sentence went through the
+confirmation branch in the two previous runs, so this is not a code regression
+but variance in how the model fills arguments.
 
-## Testy a evals
+The verbatim rule is in the prompt and in an eval assertion (`args_include`), so
+it gets caught, but nothing prevents it. The read-back safeguard currently rests
+on the model not truncating the transcript, and that is not a guarantee.
+
+**The next step for a pilot:** keep the raw span of the transcript out of the
+model and compute confidence pessimistically, so that a name the model shortens
+or invents forces a confirmation.
+
+The live run forced three other things earlier. The bot was confirming names it
+had not found at all: a patient who said Popescu was offered Dumitrescu at 0.31,
+and there is no candidate under 0.40 now. The "do not name one of many" rule was
+only in the prompt and the model broke it with 186 candidates, so `must_ask`
+lives in the data now. And a transcript with "restaurace" instead of "doktorka"
+knocked the search into a refusal.
+
+## Tests and evals
 
 ```
 $ npm run typecheck && npm test
   Test Files  5 passed (5)
-       Tests  228 passed (228)
+       Tests  274 passed (274)
    Duration  268ms
 ```
 
-Poslední naměřený placený běh:
+The last measured billed run:
 
 ```
-$ npm run evals          # 44 případů, 14. 9. 2026
+$ npm run evals          # 44 cases, 14 September 2026
 42/44 passed — 95% (threshold 80%) · conversation ms avg 8878, max 22206
                                     · TTFT avg 2105 ms, max 7048 ms (37 streamed)
 
@@ -396,73 +476,77 @@ outcome breakdown (what happened, not what was expected):
   other                0
 ```
 
-Latence v tom výpisu je za celý hovor. Na tah, tedy na to, co volající opravdu
-odčeká, to vychází na **6,7 s** (58 tahů) a první token přijde za **2,1 s**; jeden
-tah jsou dvě volání API, jedno vybere tool a druhé složí větu. Runner dnes tiskne
-`turn ms`, `conversation ms` i `TTFT` jako tři samostatné řádky.
+The latency in that output is per call. Per turn, which is what the caller
+actually waits through, it comes to **6.7 s** (58 turns), and the first token
+arrives at **2.1 s**; one turn is two API calls, one to pick the tool and one to
+build the sentence. The runner now prints `turn ms`, `conversation ms` and `TTFT`
+as three separate lines.
 
-Dva červené případy. První je chyba checkeru: bot se zeptal „Řekněte mi prosím
-jméno", což je platné doptání, ale vzor `ask_clarification` rozeznává čtyři tvary
-a rozkazovací způsob mezi nimi není. Druhý je ten popsaný výš: „stane zkus"
-dorazilo jako „stane". Starší běhy i rozlišení chyby agenta, matcheru, case nebo
-checkeru jsou v [evals/RUNS.md](evals/RUNS.md), který je zdrojem pravdy pro
-všechna čísla.
+Two red cases. The first is a checker bug: the bot asked "Řekněte mi prosím
+jméno", which is a valid question, but the `ask_clarification` pattern recognises
+four shapes and the imperative is not among them. The second is the one described
+above, "stane zkus" arriving as "stane". Older runs, and the distinction between
+a fault in the agent, the matcher, the case or the checker, are in
+[evals/RUNS.md](evals/RUNS.md), which is the source of truth for every number.
 
-Ta čísla nejsou ze stejné sady: 43 jsou surové přepisy pro matcher, 38 byl starý
-agent eval a 44 jsou dnešní behaviorální scénáře.
+Those numbers are not from the same set: 43 are raw transcripts for the matcher,
+38 was the old agent eval, and 44 are today's behavioural scenarios.
 
-## Nastavení
+## Setup
 
-Potřebuješ Node 20 nebo novější (vyvíjeno na 22) a klíč k Anthropic API.
+You need Node 20 or newer (developed on 22) and an Anthropic API key.
 
 ```bash
 npm install
-cp .env.example .env      # a doplň ANTHROPIC_API_KEY
+cp .env.example .env      # and fill in ANTHROPIC_API_KEY
 ```
 
-Plný snapshot ze zadání není v repu; committed je vzorek 500 řádků
-(`data/data-sample.json`), na kterém běží všechno včetně testů. Pokud plný
-snapshot v `data/full-snapshot/` chybí, `npm run mock-api` se na vzorek přepne
-sám a napíše to.
+The full snapshot from the exercise is not in the repository; what is committed
+is a 500-row sample (`data/data-sample.json`), and everything including the tests
+runs on it. If the full snapshot is missing from `data/full-snapshot/`,
+`npm run mock-api` falls back to the sample on its own and says so.
 
-Plný snapshot ze zadání zůstává lokální a je v `.gitignore`. V repu je jen
-stratifikovaný 500řádkový vzorek, aby šel projekt naklonovat, spustit a otestovat
-bez dalšího souboru. Čísla v `DECISIONS.md` označená jako měřená nad plným
-snapshotem jsou výsledky nad interview fixture, ne nad commitnutým vzorkem.
+The full snapshot stays local and is in `.gitignore`. Only the stratified 500-row
+sample is in the repository, so the project can be cloned, run and tested without
+another file. Numbers in `DECISIONS.md` marked as measured over the full snapshot
+are results over the interview fixture, not over the committed sample.
 
-Pořadí prvního spuštění: `ingest` potřebuje běžící `mock-api`, `doctor`
-a `evals` potřebují naplněnou databázi:
+Order for a first run: `ingest` needs `mock-api` running, and `doctor` and
+`evals` need a populated database:
 
 ```bash
-npm run mock-api                          # 1. terminál, běží dál
-npm run ingest                            # 2. terminál, jednou
+npm run mock-api                          # terminal 1, keeps running
+npm run ingest                            # terminal 2, once
 npm run doctor -- "Hledám doktora Dumitresku"
 ```
 
-`npm test` a `npm run typecheck` běží samostatně, databázi ani klíč nepotřebují.
+`npm test` and `npm run typecheck` run on their own and need neither the database
+nor a key.
 
-## Příkazy
+## Commands
 
-| Příkaz | Co dělá |
+| Command | What it does |
 |---|---|
-| `npm run mock-api` | Mock nemocničního endpointu na `:4010`, odpoví po `SLOW_MS` (default 3000, ostrý ~600000). |
-| `npm run ingest` | Stáhne snapshot, zvaliduje Zodem, atomicky prohodí do `db/doctors.sqlite`; guardy na propad počtu řádků a na nevalidní řádky. |
-| `npm run doctor -- "dotaz"` | Jeden dotaz přes agenta. Bez argumentu interaktivní režim. |
-| `npm test` | Vitest: matcher (komolení z STT, synonyma, negativní případy) + guardy ingestu. |
-| `npm run evals` | Přehraje `evals/cases.json` přes agenta, kontroluje tool cally i odpověď, spadne pod 80 %. Volá API, tedy stojí peníze. |
-| `npm run evals -- --validate-only` | Jen zkontroluje `cases.json` (hodnoty `behaviour`, názvy nástrojů, délky `turn_behaviours`) a skončí. Žádné volání API. |
+| `npm run mock-api` | Mock of the hospital endpoint on `:4010`, answers after `SLOW_MS` (default 3000, the real one around 600000). |
+| `npm run ingest` | Fetches the snapshot, validates it with Zod, swaps it atomically into `db/doctors.sqlite`; guards against a drop in row count and against invalid rows. |
+| `npm run doctor -- "query"` | One query through the agent. Interactive mode without an argument. |
+| `npm test` | Vitest: the matcher (STT manglings, synonyms, negative cases) plus the ingest guards. |
+| `npm run evals` | Replays `evals/cases.json` through the agent, checks both tool calls and the answer, fails under 80 %. Calls the API, so it costs money. |
+| `npm run evals -- --validate-only` | Only checks `cases.json` (`behaviour` values, tool names, unknown `expect` keys, `turn_behaviours` lengths) and exits. No API calls. |
 | `npm run typecheck` | `tsc --noEmit`. |
 
-## Co vědomě chybí
+## Deliberately missing
 
-Evals jsou z větší části jednotahové, vícetahových je jedenáct a z toho tři
-třítahové. Pokrývají to podstatné, doptání a kontakt až na vyžádání.
+The evals are mostly single-turn; eleven are multi-turn and three of those have
+three turns. They cover what matters, the narrowing questions and contact details
+only on request.
 
-Latence je měřená bez STT a TTS a cíl 1,5 s nesplňuje ani na tah (6,7 s), ani na
-první token (2,1 s). Podrobnosti výš.
+Latency is measured without STT and TTS, and it misses the 1.5 s goal both per
+turn (6.7 s) and to the first token (2.1 s). Details above.
 
-LangGraph tu není, přerušení toku (potvrzení jména, povinné doptání) řeším flagy
-v tool resultu. V grafu by to byl interrupt s checkpointem a je to první kandidát
-na přepis.
+There is no LangGraph here; interruptions in the flow (name confirmation, a
+mandatory question) are handled with flags in the tool result. In a graph that
+would be an interrupt with a checkpoint, and it is the first candidate for a
+rewrite.
 
-Shadow mode a monitoring chybí, obojí patří k pilotu.
+Shadow mode and monitoring are missing; both belong with a pilot.

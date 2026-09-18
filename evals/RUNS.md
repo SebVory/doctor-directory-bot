@@ -543,7 +543,7 @@ without changing anything:
   an imperative is not one of them. Agent behaviour was correct.
 - *stane zkus* – **model transcript-token-loss safety failure.** A read-only
   audit confirmed the case leaks nothing: only `utterance`/`turns` reach
-  `runTurn` (`evals/run.ts:322`), and `"stane zkus"` is an exact literal
+  `runTurn` (`evals/run.ts:327`), and `"stane zkus"` is an exact literal
   substring of the utterance (`evals/cases.json:425`, asserted at `:430`). The
   model dropped the token; the store then scored 0.817 instead of 0.579, which
   is the difference between a required read-back and a doctor named as fact. See
@@ -554,7 +554,7 @@ number is 42/44 (95 %).**
 
 ---
 
-## 2026-09-15 — re-validace jednoho vícetahového scénáře, 3 tahy
+## 2026-09-15 - re-validation of one multi-turn scenario, 3 turns
 
 Not an eval run. The narrowing dialogue in the README was labelled "skutečný
 průběh z eval běhu" and could not be shown: the runner prints answers truncated
@@ -600,10 +600,12 @@ observation of it being broken quietly.
 
 ## Next run
 
-The three case fixes above are unmeasured. The open question is whether
-`confirm_name` can fire at all in a real call, given the model repairs mangled
-surnames before the tool sees them – worth one targeted run rather than a full
-sweep.
+That open question is closed: `confirm_name` fired 4 times in the 41/42 run and
+3 to 4 times in each of the two runs after it, so the branch is live in real
+calls. What is unmeasured now is everything in the v1.0 fix round: the narrowed
+emergency guard, Czech case endings on given names, `name_confirmed` and the
+snapshot date in the system prompt. All four were verified offline
+against the snapshot and the test suite; none has seen the live model.
 
 Note on earlier numbers: the follow-up sections in `scripts/stt-report.ts` were
 paired with their setup turn by substring match, so the confirmation and

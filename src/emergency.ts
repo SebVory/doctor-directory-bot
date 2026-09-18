@@ -37,6 +37,56 @@ function fold(text: string): string {
  */
 const PAST = /\bloni\b|\bpred (rokem|lety|mesicem|tydnem)\b|\bv minulosti\b|\bmel[aioy]?\b|\bmela\b|\bprodelal[aioy]?\b/;
 
+/** Any mention of blood or bleeding, in any case ending. */
+const BLEEDING = /\bkrvac\w*|\bkrev\b|\bkrvi\b/;
+
+/**
+ * The caller is failing to stop the bleeding. The verb has to be there: "nemůžu"
+ * on its own is usually about reaching someone, not about a wound.
+ *
+ * Czech word order is free, so the failure can come before or after the verb,
+ * and both directions have to list the same failure words. They did not: the
+ * reversed branch was missing "nedaří se" and "nedokážu", so "Nedokážu zastavit
+ * krvácení" dispatched and "Krvácení zastavit nedokážu" did not. One shared
+ * source string now, because keeping two lists in step by hand is what failed.
+ */
+// Bare stems, because the reflexive "se" moves: "nedaří se to zastavit" and
+// "zastavit se nedaří" are the same sentence with the pronoun on the other side,
+// and the gap around the verb already allows it.
+const FAILS = /(nejde|nejdou|nemuz\w*|nedari\w*|nedokaz\w*|neumi\w*|neda\s+se|neda\b)/.source;
+const STOP_FAILURE = new RegExp(
+  [
+    `\\b${FAILS}\\b[^.?!]{0,30}\\bzastav\\w*`,
+    `\\bzastav\\w*[^.?!]{0,20}\\b${FAILS}\\b`,
+    "\\bnezastav\\w*",
+  ].join("|"),
+);
+
+/**
+ * The bleeding is what the caller is shopping for, not what is happening.
+ *
+ * A first attempt vetoed on any search vocabulary in the sentence, which was
+ * far too blunt and cost six true emergencies: "Nemůžu se dovolat záchranky,
+ * manželka silně krvácí" and "Potřebuji doktora, syn silně krvácí z nohy" both
+ * stopped dispatching. In a directory query the bleeding is grammatically
+ * attached to the doctor being sought or to a verb of treating it; in an
+ * emergency it is a predicate about a person, right now. So the veto has to be
+ * local to the bleeding word, never a property of the whole sentence.
+ */
+const BLEEDING_AS_CONDITION = new RegExp(
+  [
+    // "doktora na silné krvácení", "specialistu na krvácení"
+    /\b(doktor\w*|lekar\w*|specialist\w*|ordinac\w*|klinik\w*)\b[^.?!]{0,30}\bna\b[^.?!]{0,20}krvac\w*/,
+    // "která mi léčí krvácení", "co řeší krvácení", "který umí zastavit krvácení"
+    /\b(leci|lecit|lecil\w*|resi|resit|umi|provadi|zastavuje)\b[^.?!]{0,20}krvac\w*/,
+    // a standing condition rather than an event
+    /\bsklony?\s+ke?\s+krvac\w*/,
+    /krvac\w*\s+(dasni|desni|z nosu|pri menstruaci)/,
+  ]
+    .map((r) => r.source)
+    .join("|"),
+);
+
 /**
  * Each entry is one recognised emergency, as a caller actually says it.
  *
@@ -44,7 +94,8 @@ const PAST = /\bloni\b|\bpred (rokem|lety|mesicem|tydnem)\b|\bv minulosti\b|\bme
  * to the model, because "bolest na hrudi" also shows up in "hledám doktora na
  * bolesti na hrudi". Head trauma needs a trauma verb — a fall, a blow, the word
  * "úraz" or "poranění" — never the bare word "hlava". Bleeding needs the caller
- * to be trying to stop it. Stroke wording needs a present-tense sign.
+ * to be failing to stop it, or to describe it as heavy outside a search framing.
+ * Stroke wording needs a present-tense sign.
  */
 const PATTERNS: ReadonlyArray<{ readonly label: string; readonly test: (t: string) => boolean }> = [
   {
@@ -62,9 +113,17 @@ const PATTERNS: ReadonlyArray<{ readonly label: string; readonly test: (t: strin
   },
   {
     label: "bleeding the caller cannot stop",
+    // Two ways in, and both had to be narrowed after they fired on directory
+    // queries. "Nemůžu" near "krvácení" is not a symptom — "Nemůžu se dovolat
+    // doktorce, co mi léčí krvácení dásní" is a caller who cannot get through —
+    // so the failure to stop it has to attach to a stopping verb, not float
+    // anywhere in the sentence. And "silné krvácení" is how a caller names the
+    // condition they want treated, so it does not count when the bleeding is
+    // grammatically the thing being shopped for.
     test: (t) =>
-      /\bsilne krvaceni\b|\bsilne krvaci\b|\bhodne krvaci\b|\bzastavit krvaceni\b|\bzastavit krev\b/.test(t) ||
-      (/\bkrvac\w*/.test(t) && /\bnejde\b|\bnemuzu\b|\bneda se\b|\bnezastav\w*/.test(t)),
+      (BLEEDING.test(t) && STOP_FAILURE.test(t)) ||
+      (/\bsilne krvaceni\b|\bsilne krvaci\b|\bhodne krvaci\b|\bzastavit krvaceni\b|\bzastavit krev\b/.test(t) &&
+        !BLEEDING_AS_CONDITION.test(t)),
   },
   {
     label: "unconscious or unresponsive",

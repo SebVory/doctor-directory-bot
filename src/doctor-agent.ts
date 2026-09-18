@@ -6,10 +6,10 @@ import { createInterface } from "node:readline/promises";
 import { pathToFileURL } from "node:url";
 import type Anthropic from "@anthropic-ai/sdk";
 import { EFFORT, MODEL, makeClient } from "./config.js";
-import { type FindResult, findDoctors, getDoctorContact } from "./doctor-store.js";
+import { type FindResult, dataAsOf, findDoctors, getDoctorContact } from "./doctor-store.js";
 import { emergencyReason } from "./emergency.js";
 
-const SYSTEM = `Jsi telefonní asistent nemocniční sítě v Rumunsku. Mluvíš po telefonu s českým pacientem a hledáš mu lékaře.
+const SYSTEM_RULES = `Jsi telefonní asistent nemocniční sítě v Rumunsku. Mluvíš po telefonu s českým pacientem a hledáš mu lékaře.
 
 Mluv vždy jen česky, včetně první věty, kterou řekneš před hledáním.
 
@@ -30,12 +30,13 @@ Jak pracuješ:
 - Když najdeš víc kandidátů, zeptej se přesně na to, co je v best_question: použij jeho attribute a vyjmenuj jeho options. Nikdy se neptej na údaj, který mají všichni kandidáti stejný. Například: "Doktorů Dumitrescu mám víc. V jakém městě ordinuje — v Kluži, v Oradeji, nebo v Galati?" Když je distinct_total větší než počet options, řekni "například", ať volající ví, že jsou i další.
 - Při dvou a více kandidátech nikdy žádného z nich nenabízej jako odpověď a nikdy se neptej "to bude on?" nebo "to bude ona?". Vždy polož otázku z best_question. Jméno konkrétního lékaře řekni teprve tehdy, když zbyde jediný kandidát.
 - Když má odpověď z find_doctors needs_confirmation true, nejdřív si jméno ověř zpátky, než začneš číst jakékoli údaje: "Slyšel jsem správně, že hledáte doktora Munteanu?"
+- Když volající to jméno potvrdí ("jo, to je on", "ano, přesně tak"), zavolej find_doctors znovu se stejnými údaji jako předtím a navíc s name_confirmed true. Jméno pořád předávej doslova tak, jak zaznělo od volajícího — neopravuj ho. Bez name_confirmed dostaneš stejnou otázku znovu a nikam se nedostaneš.
 - Když nenajdeš nic, řekni to a zeptej se na specializaci nebo město.
-- Telefon, adresu, e-mail a ordinační hodiny říkej jen tehdy, když si o ně volající řekne — tehdy zavolej get_doctor_contact. Sám je nenabízej. Když se ale zeptal hned v první větě a vyšel ti právě jeden lékař, dej mu je rovnou v téhle odpovědi.
+- Telefon, adresu, e-mail a ordinační hodiny říkej jen tehdy, když si o ně volající řekne — tehdy zavolej get_doctor_contact. Sám je nečti. Nabídnout je smíš jednou větou, až když zbyl jediný lékař ("Přejete si kontakt nebo ordinační hodiny?"). Když se o ně volající zeptal hned v první větě a vyšel ti právě jeden lékař, dej mu je rovnou v téhle odpovědi.
 - Na "do kolika má" nebo "kdy ordinuje" u jednoho určeného lékaře zavolej get_doctor_contact a přečti availability.
 - Když má kontakt email_shared true, řekni, že ta e-mailová adresa patří klinice a sdílí ji víc lékařů stejného jména, a že přímý je telefon.
 - Když se best_question ptá na languages, znamená to, že se ti dva záznamy liší jen jazyky a telefonem. Řekni to rovnou ("Mám tam dva se stejným jménem i oborem, liší se jen jazyky") a teprve pak se zeptej.
-- Když se volající ptá, jak jsou údaje čerstvé, řekni datum z pole data_as_of.
+- Když se volající ptá, jak jsou údaje čerstvé, řekni datum ze seznamu výš. Nevolej kvůli tomu find_doctors.
 - Při akutních příznacích (bolest na hrudi, dušnost, silné krvácení, bezvědomí, příznaky mrtvice, čerstvý úraz hlavy) odpověz pouze přesně touto větou: "Volejte okamžitě 155." Nic nevysvětluj, neomlouvej se, nedávej žádnou radu, na nic se neptej a nevolej žádný nástroj. Tohle pravidlo má přednost před pravidlem o radách: i když se volající ptá na postup ("můžu s ním hýbat?"), u akutního stavu platí 155.
 - Umíš jen vyhledat lékaře a jeho kontakt. Na příznaky, diagnózu, léky, dávkování nebo objednání termínu odpověz jednou větou, že s tímhle pomoct neumíš, a nabídni, že najdeš lékaře odpovídajícího oboru.`;
 
@@ -52,8 +53,13 @@ const tools: Anthropic.Tool[] = [
         speciality: { type: ["string", "null"], description: "Česky, např. kardiolog, dětský lékař." },
         city: { type: ["string", "null"], description: "Město doslova tak, jak zaznělo v přepisu, i když je zkomolené. Neopravuj ho." },
         language: { type: ["string", "null"], description: "Česky, např. anglicky, maďarsky." },
+        name_confirmed: {
+          type: ["boolean", "null"],
+          description:
+            "true jen tehdy, když jsi v předchozím tahu přečetl jméno zpátky a volající ho potvrdil. Jinak null. Zruší opakované ověřování jména; víc kandidátů tím nezmizí.",
+        },
       },
-      required: ["surname", "first_name", "speciality", "city", "language"],
+      required: ["surname", "first_name", "speciality", "city", "language", "name_confirmed"],
       additionalProperties: false,
     },
     strict: true,
@@ -70,6 +76,35 @@ const tools: Anthropic.Tool[] = [
     strict: true,
   },
 ];
+
+/**
+ * The rules plus the one fact that changes daily.
+ *
+ * Cached on the snapshot date rather than built once, which is the whole point:
+ * it goes into the request with cache_control, so it has to be byte-identical
+ * between turns of the same call, but a process that outlives the nightly
+ * ingest must not keep quoting yesterday. This is the same trap doctor-store
+ * re-reads `meta` on every query to avoid, and caching once per process walked
+ * straight back into it. A missing snapshot is not fatal — the date line is
+ * left out, and it appears on its own once there is a snapshot to ask.
+ */
+let systemCache: { loaded: string; text: string } | null = null;
+function systemPrompt(): string {
+  let loaded: string;
+  try {
+    loaded = dataAsOf();
+  } catch {
+    loaded = "unknown";
+  }
+  if (systemCache?.loaded === loaded) return systemCache.text;
+
+  const text =
+    loaded === "unknown"
+      ? SYSTEM_RULES
+      : `${SYSTEM_RULES}\n\nSeznam lékařů je z ${loaded}. Tohle datum řekni, když se volající ptá, jak jsou údaje aktuální.`;
+  systemCache = { loaded, text };
+  return text;
+}
 
 /** Hard stop on the tool loop — a phone line cannot wait for a runaway agent. */
 const MAX_TOOL_TURNS = 6;
@@ -213,6 +248,7 @@ function runTool(name: string, input: Record<string, unknown>): string {
         speciality: nullableString(input["speciality"]),
         city: nullableString(input["city"]),
         language: nullableString(input["language"]),
+        name_confirmed: input["name_confirmed"] === true,
       });
       return JSON.stringify(findDoctorsPayload(result));
     }
@@ -278,7 +314,7 @@ export async function runTurn(
       max_tokens: 2048,
       // Tools then system form a stable prefix on every turn of every call; the
       // breakpoint on system covers both. Volatile content stays in messages.
-      system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
+      system: [{ type: "text", text: systemPrompt(), cache_control: { type: "ephemeral" } }],
       output_config: { effort: EFFORT },
       tools,
       messages,
