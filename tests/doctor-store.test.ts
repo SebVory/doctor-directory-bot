@@ -9,10 +9,10 @@ const dir = mkdtempSync(join(tmpdir(), "store-test-"));
 process.env["DOCTORS_DB"] = join(dir, "doctors.sqlite");
 
 const { DoctorSchema, loadSnapshot } = await import("../src/ingest.js");
-const { CONFIRM_THRESHOLD, DOMINANCE_TRIGGER, SUGGESTION_FLOOR, findDoctors, getDoctorContact } =
+const { CONFIRM_THRESHOLD, DOMINANCE_TRIGGER, SUGGESTION_FLOOR, dataAsOf, findDoctors, getDoctorContact } =
   await import("../src/doctor-store.js");
 const { normalize, similarityOfNormalized } = await import("../src/match.js");
-const { findDoctorsPayload } = await import("../src/doctor-agent.js");
+const { findDoctorsPayload, runTurn } = await import("../src/doctor-agent.js");
 
 const rows = (JSON.parse(readFileSync("./data/data-sample.json", "utf8")) as unknown[]).map((r) =>
   DoctorSchema.parse(r),
@@ -165,6 +165,16 @@ describe("a given name must not substitute a neighbour", () => {
     const oana = findDoctors({ first_name: "Oano" });
     expect(oana.matches.length).toBeGreaterThan(0);
     expect(oana.matches[0]?.first_name).toBe("Oana");
+  });
+
+  it("only considers base forms that are real names here", () => {
+    // "Oano" normalises to "ono" — the transliteration flattens the diphthong —
+    // and its bare stem "on" scores 0.50 against "Ionut", over the floor. A
+    // hypothesis nobody is called cannot identify anyone, so the candidates are
+    // filtered against the snapshot before scoring.
+    const oana = findDoctors({ first_name: "Oano", limit: 50 });
+    expect(oana.matches.length).toBeGreaterThan(0);
+    expect(oana.matches.map((m) => m.first_name)).not.toContain("Ionut");
   });
 
   it("does not widen a given name the data already knows", () => {
@@ -517,5 +527,70 @@ describe("snapshot cache", () => {
     const after = findDoctors({ surname: "Dumitresku" });
     expect(after.data_as_of).not.toBe(before.data_as_of);
     expect(after.candidates).toBeLessThanOrEqual(before.candidates);
+  });
+});
+
+describe("confirming a misheard name", () => {
+  it("holds the id back until the name is confirmed", () => {
+    const heard = findDoctors({ surname: "Váselysku", city: "Kluž", speciality: "dětský lékař" });
+    expect(heard.needs_confirmation).toBe(true);
+    expect(heard.matches[0]?.last_name).toBe("Vasilescu");
+  });
+
+  it("lets the caller out of the confirmation loop", () => {
+    // Before name_confirmed existed this was a dead end: the model is told to
+    // pass names through verbatim, so the search after "jo, to je ona" sent
+    // "Váselysku" again and got the same question back, for ever.
+    const confirmed = findDoctors({
+      surname: "Váselysku",
+      city: "Kluž",
+      speciality: "dětský lékař",
+      name_confirmed: true,
+    });
+    expect(confirmed.needs_confirmation).toBe(false);
+    expect(confirmed.matches[0]?.last_name).toBe("Vasilescu");
+  });
+
+  it("re-narrows on the real name instead of picking one of its namesakes", () => {
+    // The dangerous shape. "Váselysku" alone scores under the confirm
+    // threshold, so nothing is a confident candidate and must_ask would stay
+    // false — a confirmation would have released the id of one arbitrary
+    // Vasilescu. Confirming the name means searching for the real one.
+    const confirmed = findDoctors({ surname: "Váselysku", name_confirmed: true });
+    expect(confirmed.needs_confirmation).toBe(false);
+    expect(confirmed.candidates).toBeGreaterThan(1);
+    expect(confirmed.must_ask).toBe(true);
+  });
+});
+
+describe("dataAsOf", () => {
+  it("reports the snapshot date without running a search", () => {
+    expect(dataAsOf()).toBe(findDoctors({ surname: "Popa" }).data_as_of);
+  });
+});
+
+describe("snapshot date in the system prompt", () => {
+  it("is there, so asking how current the data is costs no search", () => {
+    // It used to be readable only off the end of a find_doctors result, so
+    // "jsou ty údaje aktuální?" ran a filterless scan over every row to fetch
+    // one date. Captured from the request rather than asserted on the constant,
+    // because the constant is not what gets sent.
+    let system = "";
+    const recording = {
+      messages: {
+        create: async (params: { system?: unknown }) => {
+          system = JSON.stringify(params.system ?? "");
+          return {
+            id: "msg", type: "message", role: "assistant", model: "test",
+            content: [{ type: "text", text: "Seznam je aktuální." }],
+            stop_reason: "end_turn", usage: {},
+          };
+        },
+      },
+    };
+    return runTurn("Jsou ty údaje aktuální?", [], { trace: false, client: recording as never }).then((result) => {
+      expect(system).toContain(dataAsOf());
+      expect(result.toolCalls).toHaveLength(0);
+    });
   });
 });

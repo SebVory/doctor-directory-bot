@@ -169,6 +169,20 @@ export type FindQuery = {
   city?: string;
   language?: string;
   limit?: number;
+  /**
+   * The caller has just confirmed the name that was read back to them.
+   *
+   * Without this the confirmation step has no exit. The model is told to pass
+   * names through verbatim, so the second search after "jo, to je on" sends the
+   * same mangled surname, scores it the same way, and gets needs_confirmation
+   * back again — with the id still withheld. The loop only ended when the model
+   * broke the verbatim rule and typed the corrected name.
+   *
+   * It clears the name doubt and nothing else: several candidates still have to
+   * be narrowed, because agreeing to a surname does not say which of the ten
+   * people carrying it the caller wants.
+   */
+  name_confirmed?: boolean;
 };
 
 export type FindResult = {
@@ -318,10 +332,17 @@ export function findDoctors(query: FindQuery): FindResult {
   const firstNorm = query.first_name === undefined ? null : normalize(query.first_name);
 
   // A given name the data already knows is taken at its word. Anything else may
-  // be a Czech case ending, so it is scored against every base form it could
-  // have come from — see firstNameVariants.
+  // be a Czech case ending, so it is scored against the base forms it could have
+  // come from — but only those that are real names here. A hypothesis nobody in
+  // the snapshot is called cannot identify anyone, and loose ones do damage:
+  // "Oano" normalises to "ono", whose bare stem let three Ionuts into the
+  // candidates for Oana at 0.50 and pushed the count from 10 to 14.
   const firstCandidates =
-    firstNorm === null ? null : knownFirstNames.has(firstNorm) ? [firstNorm] : firstNameVariants(firstNorm);
+    firstNorm === null
+      ? null
+      : knownFirstNames.has(firstNorm)
+        ? [firstNorm]
+        : [firstNorm, ...firstNameVariants(firstNorm).filter((v) => v !== firstNorm && knownFirstNames.has(v))];
 
   // 7029 rows carry 26 distinct surnames and 30 given names between them, so
   // scoring per row rebuilt the same trigram sets thousands of times: 7029 calls
@@ -422,7 +443,29 @@ export function findDoctors(query: FindQuery): FindResult {
     topEntry !== undefined &&
     topEntry.row.last_name_norm !== surnameNorm;
 
-  const needs_confirmation = surnameUnsure || firstNameUnsure || surname_substituted;
+  // A confirmed name is no longer the caller's approximation of it — it is the
+  // name on the row that was read back. Clearing the flag alone would be worse
+  // than the deadlock it fixes: "Váselysku" scores under the confirm threshold,
+  // so nothing counts as a confident candidate, must_ask stays false, and the
+  // turn would hand out the id of one arbitrary Vasilescu out of 270. So the
+  // heard name is replaced by the real one and the search runs again, which is
+  // what the caller actually agreed to. The second pass matches exactly, so it
+  // raises no doubt of its own and cannot recurse further.
+  if (query.name_confirmed === true && topEntry !== undefined) {
+    const surnameDiffers = surnameNorm !== null && topEntry.row.last_name_norm !== surnameNorm;
+    const firstDiffers = firstNorm !== null && topEntry.row.first_name_norm !== firstNorm;
+    if (surnameDiffers || firstDiffers) {
+      const { name_confirmed: _confirmed, ...rest } = query;
+      return findDoctors({
+        ...rest,
+        ...(surnameNorm === null ? {} : { surname: topEntry.row.last_name }),
+        ...(firstNorm === null ? {} : { first_name: topEntry.row.first_name }),
+      });
+    }
+  }
+
+  const needs_confirmation =
+    query.name_confirmed !== true && (surnameUnsure || firstNameUnsure || surname_substituted);
 
 
   return {
@@ -436,6 +479,17 @@ export function findDoctors(query: FindQuery): FindResult {
     unresolved,
     data_as_of: dataAsOf,
   };
+}
+
+/**
+ * When the snapshot was loaded, without running a search.
+ *
+ * "Jsou ty údaje aktuální?" used to be answerable only out of a find_doctors
+ * result, so the bot ran a filterless scan over 7029 rows to read one date off
+ * the end of it. The date belongs in the system prompt instead.
+ */
+export function dataAsOf(): string {
+  return store().dataAsOf;
 }
 
 export function getDoctorContact(id: string): DoctorContact | null {

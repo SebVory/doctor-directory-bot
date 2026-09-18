@@ -64,7 +64,8 @@ Dobrý den, chci se zeptat, dokolika má paní doktorka, Maria Ionesca? A pokud 
 => Ionescu Maria, hodiny + e-mail | 1 → hodiny a e-mail, víc → ask
 
 Dobrý den, chtěl bych se zeptat, paní doktorka Nikola Čiová, tady od nás z Botosany, jaké, jaké má číslo, prosím?
-=> Chivu (žena, Nicoleta?), Botosani, telefon | město zužuje; 1 → telefon, víc → ask; STT: Čiová, Botosany  [OVĚŘ příjmení]
+=> Chivu Nicolae (muž, onkolog), Botosani, telefon | město zužuje; 1 → telefon, víc → ask; STT: Čiová, Botosany  [OVĚŘ příjmení]
+   pozn.: v Botosani jsou tři Chivu (Nicolae, Ionut, Florin), všichni muži; "Nikola" sedí na Nicolae na 1,000, "Čiová" na Chivu na 0,000
 
 Dobrý den, slyšíme se? Chtěl bych se zeptat, na číslo, pana doktora. Stefana Matěje.
 => Matei Stefan, telefon | 1 → telefon, víc → ask; "slyšíme se" ignorovat, pokračovat
@@ -171,7 +172,8 @@ Ani jedna, hledám jinou
 => žádná z nabízených | bot řekne, že jiné s tím příjmením v daném zúžení nemá, a nabídne jiné město nebo obor
 
 Laura ta pediatrička
-=> Laura, Pediatrics | 1 → found
+=> Laura, Pediatrics | v rámci už zúžené sady: 1 → found, jinak ask
+   pozn.: bez předchozího zúžení to jeden člověk není — Laur s oborem Pediatrics je v datech 14
 
 ## Odpoved na otazku po oboru
 
