@@ -26,6 +26,15 @@ Předpoklady, otevřené otázky a definice úspěchu jsou v
 | odpověď do 1,5 s od konce věty | **nesplněno**, první token za 2,1 s (max 7,0 s), celý tah v průměru 6,7 s |
 | 95 % hovorů vyřízených bez předání člověku | **neměřitelné bez provozu**, containment se dá zjistit až ze shadow modu |
 
+Po odeslání jsem repo nechal přečíst druhým modelem a devět jeho třinácti
+připomínek sedělo. Čtyři z nich byly chyby v chování, ne v textu: emergency
+guard posílal na 155 i běžné dotazy se slovem „krvácení", pádové koncovky
+u křestních jmen se četly jako jiný člověk, potvrzení jména nemělo cestu ven
+a dotaz na čerstvost dat spouštěl hledání přes všech 7029 řádků. Všechno je
+opravené a ověřené offline proti snapshotu a 254 testům, ale **proti živému
+modelu to zatím neběželo**, číslo 42/44 výš je z běhu před těmi opravami.
+Podrobně v [DECISIONS.md](DECISIONS.md) §20 a §21.
+
 ## 3 min summary
 
 **Co jsem postavil.** Hlasový directory bot nad nemocničním endpointem, který
@@ -124,13 +133,20 @@ před modelem a k API vůbec nedojdou. Jednotahový případ, který API opravdu
 vychází na **7,6 s**. Runner teď tiskne všechny tři jednotky zvlášť.
 
 Čas je celý ve dvou voláních modelu na jeden tah: první vybere tool, druhé
-z výsledku složí větu. Dotaz do SQLite mezi nimi trvá **0,1 až 0,5 ms** na 7029
-řádcích, protože tabulka má indexy na příjmení, město i obor a fuzzy skóre se
-počítá až nad tím, co projde filtrem. Ve storu tedy zrychlovat nemá co.
+z výsledku složí větu. Dotaz do SQLite mezi nimi je proti tomu zaokrouhlovací
+chyba, ale ne tak malá, jak tu dřív stálo. S městem nebo oborem ve filtru běží
+za **0,2 ms**, protože na ně tabulka má index. Se samotným příjmením žádný
+`WHERE` nemá, protože příjmení se neporovnává rovností, ale fuzzy skóre v JS nad všemi
+7029 řádky. To je nejčastější tvar dotazu a stál **7,6 až 8,3 ms**; memoizace
+skóre na 26 distinktních příjmení ho srazila na **4,2 až 4,6 ms** a zbytek jsou
+3,4 ms na samotný `SELECT`. Pořád je to tisícina jednoho volání modelu, takže
+zrychlovat se má jinde, ale „indexy to řeší" nebyla pravda.
 
 Čtyři podezřelé jsem proměřil, tři z nich to nejsou (detaily v
 [DECISIONS.md](DECISIONS.md) §8): jiný model (Sonnet stejně rychlý a míň
-spolehlivý, Haiku výrazně pomalejší), `effort` (5980 proti 5968 ms), thinking
+spolehlivý; Haiku parametr `effort` odmítlo, takže jeho 16,5 s je čas chybových
+opakování SDK, ne generování, takže jak je Haiku rychlé nevím), `effort` (5980 proti
+5968 ms), thinking
 (model ho vygeneroval 0 až 19 tokenů) ani prompt cache, jejíž efekt se ztratil
 v rozptylu. Menší payload ubral 7309 → 7132 ms, skoro nic, ale zadarmo.
 
@@ -174,8 +190,8 @@ jen telefonem, adresou a jazyky, a na ty se bot ptá jazykem a řekne proč.
 - **Okres je město o patro výš.** Žádné ze 42 měst neleží ve dvou okresech
   a okresů je jen 34 (Cluj je Cluj-Napoca i Turda), takže řeže míň než město
   a po městě nepřidá nic.
-- **E-mail se odvozuje ze jména a kliniky**, takže 616 skupin sdílí schránku, přes
-  669 řádků. Kontakt nese `email_shared` a bot řekne, že přímý je telefon.
+- **E-mail se odvozuje ze jména a kliniky**, takže schránku sdílí 1285 řádků
+  v 616 skupinách. Kontakt nese `email_shared` a bot řekne, že přímý je telefon.
 - **PSČ je náhodné**, jen v Kluži je jich 173.
 
 Jediné unikátní pole je telefon, 7029 ze 7029.
@@ -215,8 +231,8 @@ v pilotu by ho ověřil podíl otázek, na které přijde „nevím“.
 |---|---:|---|---|---:|
 | příjmení | 26 | Vasilescu 291 | Nistor 248 | 272 |
 | křestní jméno | 30 | Florin 264 | Alexandru 209 | 232 |
-| město | 42 | Galati 196 | Drobeta-Turnu Severin 141 | 165 |
-| obor | 20 | Infectious Diseases 381 | Neurology 325 | 347 |
+| město | 42 | Galati 196 | Drobeta-Turnu Severin 141 | 164 |
+| obor | 20 | Infectious Diseases 381 | Neurology 325 | 350 |
 | jazyk | 7 | rumunština 2033 | italština 1979 | 2016 |
 
 Šest nejčastějších a šest nejvzácnějších příjmení z těch 26:
@@ -315,7 +331,26 @@ proti „Ilie" bylo 0,000, dokud se neukázalo, že to není limit trigramů, al
 chybějící řádek v transliterační tabulce; dnes je to 1,000. Co se nespraví, padá
 bezpečně do not_found, tedy na doptání, ne na špatného lékaře.
 
-**13. Co vědomě chybí:** shadow mode, monitoring, reálné STT/TTS, rate limiting
+**13. České pádové koncovky se řeší ve storu, ne promptem.** Od chvíle, kdy jména
+chodí do toolu doslova, dostává store „Alinu", ne „Alina". Trigramy to hodnotí
+0,817, pod hranicí pro ověření, takže si bot nechával potvrdit jméno, které
+volající právě správně vyslovil. U kratších jmen je to horší: „Anu" a „Ana"
+nemají společný ani jeden trigram, skóre 0,000, řádek propadne pod floor a deset
+Oan v Oradeji se vrátí jako „nemám". Koncovku nejde useknout jako u příjmení,
+protože -u, -i i -a jsou skutečné rumunské koncovky a z „Radu" by zbylo „Rad".
+Poslední samohláska se proto vymění za každou, kterou mohla nahradit, a bere se
+nejlepší kandidát. Ze 118 pádových tvarů 30 jmen v datech selhávalo 21, teď 0.
+
+**14. Potvrzení jména musí mít cestu ven.** Doslovné předávání znamená, že po
+„jo, to je ona" jde do toolu zase „Váselysku", dostane stejné skóre a stejnou
+otázku, a `id` zůstane zadržené. Jediná cesta ven bylo pravidlo porušit.
+`find_doctors` proto bere `name_confirmed`, a samotné zhasnutí příznaku by bylo
+horší než ten deadlock: „Váselysku" je pod prahem jistoty, takže žádný kandidát
+není „confident", `must_ask` zůstane false a tah by vydal `id` jedné z 291
+Vasilescu. Potvrzené jméno se místo toho nahradí tím, které bot přečetl zpátky,
+a hledá se znovu.
+
+**15. Co vědomě chybí:** shadow mode, monitoring, reálné STT/TTS, rate limiting
 a edge cases, které přinese až pilot.
 
 ## Co mě naučily reálné přepisy
@@ -374,7 +409,7 @@ a model ho porušil u 186 kandidátů, takže je teď `must_ask` v datech. Přep
 ```
 $ npm run typecheck && npm test
   Test Files  5 passed (5)
-       Tests  228 passed (228)
+       Tests  254 passed (254)
    Duration  268ms
 ```
 

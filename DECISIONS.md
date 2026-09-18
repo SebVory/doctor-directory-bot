@@ -79,7 +79,7 @@ minimum viable question set. No lookup can end on a name alone. City is the
 better first question (42 values, 141–196 doctors each) than speciality (20
 values, 325–381 each).
 
-The 43 raw macOS transcripts, the 38-case agent eval of 11 September, and the
+The 43 raw macOS transcripts, the 38-case agent eval of 14 September, and the
 44-case eval that stands today (42 until two guard cases were added on
 14 September) are different collections and must not be compared as if they had
 the same denominator. The current score is **42/44**; every other figure in this
@@ -300,6 +300,15 @@ synonyms lifted from the transcripts. Offline over the 43 transcripts that moved
 31 match / 7 miss to **35 / 3**, with no false positive among the nine towns
 outside the network and all 42 real locations still resolving to themselves.
 
+**Where that claim stops.** Those nine towns were a one-off check and only
+Ostrava is pinned by a test. Re-run later against 55 Czech and Slovak place
+names, the 0.55 city floor produces two false positives: "Galanta" resolves to
+Galati and "Sibiř" to Sibiu. Both are real things a caller could say, and the
+bot would silently search the wrong city rather than say it does not have it.
+Two in 55 is the honest number; raising the floor would cost the mishearings the
+floor was lowered for, so it is a threshold to revisit with a billed run, not a
+one-line change. The check is now a test rather than a memory.
+
 The `y→i` measurement stands: it was worthless then and is worthless now.
 
 ---
@@ -371,9 +380,10 @@ because the model pre-corrected, and with the raw transcript "stane zkus" reache
 Stanescu at 0.579 and would have been read out as fact. One bar, 0.6, whatever
 else the caller gave.
 
-**Measured.** The run that followed scored 41/42 with `confirm_name` at **4**,
-and `stane zkus` reached the read-back branch – the guard that had been dead at 0
-was alive. The latest billed run, 44 cases on 14 September, scored **42/44
+**Measured.** Three runs followed, not one: 37/40 on the first API run after the
+change, 38/40 on the clean re-run, and 41/42 once ids were withheld. It is the
+third that had `confirm_name` at **4** and `stane zkus` reaching the read-back
+branch – the guard that had been dead at 0 was alive. The latest billed run, 44 cases on 14 September, scored **42/44
 (95 %)** and is the current figure. It is also the run that measured the
 emergency guard of §18, which had been merged before it.
 
@@ -524,9 +534,9 @@ previous runs with identical code, so this is variance in how the model fills
 arguments, not a regression.
 
 **Not an eval problem.** A read-only audit traced every field of every case:
-only `utterance`/`turns` reach `runTurn` (`evals/run.ts:322`), and `note` plus
+only `utterance`/`turns` reach `runTurn` (`evals/run.ts:327`), and `note` plus
 every `expect` key is consumed by `checkCase` after the turn completes
-(`evals/run.ts:349`). Twelve of thirteen `args_include` values are exact literal
+(`evals/run.ts:355`). Twelve of thirteen `args_include` values are exact literal
 substrings of their utterance, `"stane zkus"` among them. The assertion described
 the transcript correctly; the model did not.
 
@@ -553,6 +563,89 @@ has to be measured offline against the 44 cases and the 43 transcripts, and then
 once against the live model. Shipping it unmeasured tonight would repeat the
 mistake this file keeps recording: a safety heuristic added on the strength of an
 argument rather than a number. **It is designed, not implemented.**
+
+---
+
+## 20. A second reading of the code found four bugs the evals could not see
+
+**Context.** A second model was pointed at the repository with the data and told
+to check every number in it. It reported thirteen problems. Nine were real, one
+was backwards, three were documentation drift. Everything below was reproduced
+offline against the snapshot before anything was changed, because a review is a
+claim, not a measurement.
+
+**The emergency guard was dispatching directory queries.** `krvácení` plus
+`nemůžu` anywhere in the same sentence counted as bleeding the caller cannot
+stop, but "nemůžu" in Czech is nearly always about failing to reach someone:
+"Nemůžu se dovolat paní doktorce, která mi léčí krvácení dásní" went to 155.
+"Silné krvácení" matched inside an explicit search for a doctor who treats it.
+The failure now has to attach to a stopping verb, and the heavy-bleeding wording
+only counts outside a search framing. **22 of 22** on a positive/negative set,
+and still exactly the same 3 fires across all 44 cases.
+
+**Czech case endings were being read as different people.** This is the cost of
+§15, and it was not visible when §15 was measured: once names go to the store
+verbatim, the store gets "Alinu", not "Alina". Trigram Dice scores that 0.817,
+under the 0.85 read-back bar, so the bot confirmed a name the caller had just
+pronounced correctly. Under five letters it collapses – "Anu" and "Ana" share no
+trigram at all and score **0.000**, under the floor, so the row was dropped and
+ten Oanas in Oradea came back as "nemám". Of 118 case forms of the 30 given
+names in the data, **21 failed**. Stripping the ending the way `normalizeSurname`
+does is unsafe here, because -u, -i and -a are all real Romanian endings and
+"Radu" would become "Rad", so instead the final vowel is swapped for each vowel
+it could have replaced and the best candidate wins. Candidates are filtered
+against the snapshot: "Oano" normalises to "ono" – the transliteration flattens
+the diphthong – and its bare stem scored 0.50 against "Ionut", which had pushed
+the candidate count for Oradea from 10 to 14. **118 of 118 now resolve.**
+
+A test had pinned the 0.817 read-back as correct behaviour. It asserted the bug.
+
+**Confirming a name had no exit.** The verbatim rule says pass the surname as it
+was heard, so the search after "jo, to je ona" sent "Váselysku" again, scored it
+the same, and got `needs_confirmation` back with the id still withheld. The loop
+only ever ended when the model broke the verbatim rule. `find_doctors` now takes
+`name_confirmed` – and clearing the flag alone would have been worse than the
+deadlock: "Váselysku" scores under the confirm threshold, so nothing is a
+confident candidate, `must_ask` stays false, and the turn would have released
+the id of one arbitrary Vasilescu out of **291**. A confirmed name is instead
+replaced by the name that was read back and the search runs again, which is what
+the caller actually agreed to. Narrowed, that yields one id; unnarrowed, it
+yields 291 candidates and the question "which city".
+
+**Asking how fresh the data is ran a full scan.** `data_as_of` was readable only
+off the end of a `find_doctors` result, so the bot searched 7029 rows with no
+filter to read one date. It is in the system prompt now, built once and cached
+so it stays byte-identical for prompt caching.
+
+**What the review got wrong.** It reported that 40 of the 44 eval cases come
+from the transcripts and four were hand-written. Matching each case's opening
+against `stt-transcripts.txt` gives **42 and 2**, which is what the README says.
+It also read a transcript line as claiming Laura Dumitrescu in Cluj is a
+paediatrician; the line names no city, and the annotation was loose rather than
+wrong. It is now explicit that "1 → found" holds within an already narrowed set.
+
+**Still unmeasured.** None of this has seen the live model. It is offline work
+against the snapshot and 254 tests.
+
+## 21. "Indexy to řeší" was not true for the commonest query
+
+**Claimed.** 0.1 to 0.5 ms per store query over 7029 rows, because the table is
+indexed on surname, city and speciality and the fuzzy score only runs over what
+the filter leaves.
+
+**Measured.** True with a city or speciality, at 0.2 ms. False for a surname,
+which is the commonest shape a caller gives: a surname is not compared by
+equality, so it never reaches a `WHERE`, and the fuzzy score ran in JS over all
+7029 rows for **7.6 to 8.3 ms** (p50 of 300). The surname index was never used.
+
+**Decided.** The rows carry only 26 distinct surnames and 30 given names, so
+scoring per row rebuilt the same trigram sets thousands of times: 7029 calls
+cost 9.1 ms, the 26 distinct ones 0.66 ms. Memoising on the normalized column
+took the surname-only query to **4.2 to 4.6 ms**, of which 3.4 ms is the
+unfiltered `SELECT` itself. It changes nothing a caller can hear – it is three
+orders of magnitude under one model call – and it is in because the claim in the
+README had to become true or go, and because it paid for the extra given-name
+candidates several times over.
 
 ---
 

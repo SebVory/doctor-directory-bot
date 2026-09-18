@@ -62,7 +62,7 @@ export function normalize(input: string): string {
  * A caller says "doktorka Munteanuová"; the data says "Munteanu".
  *
  * This is surname-only on purpose — folding it into normalize() would eat real
- * Romanian place names ("Craiova" -> "kraj").
+ * Romanian place names ("Craiova" -> "krai").
  */
 export const FEMININE_SUFFIXES: readonly string[] = ["ovou", "ove", "ovy", "ova"];
 
