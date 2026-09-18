@@ -53,7 +53,7 @@ const BLEEDING = /\bkrvac\w*|\bkrev\b|\bkrvi\b/;
 // Bare stems, because the reflexive "se" moves: "nedaří se to zastavit" and
 // "zastavit se nedaří" are the same sentence with the pronoun on the other side,
 // and the gap around the verb already allows it.
-const FAILS = /(nejde|nejdou|nemuz\w*|nedari\w*|nedokaz\w*|neda\s+se|neda\b)/.source;
+const FAILS = /(nejde|nejdou|nemuz\w*|nedari\w*|nedokaz\w*|neumi\w*|neda\s+se|neda\b)/.source;
 const STOP_FAILURE = new RegExp(
   [
     `\\b${FAILS}\\b[^.?!]{0,30}\\bzastav\\w*`,
@@ -77,8 +77,8 @@ const BLEEDING_AS_CONDITION = new RegExp(
   [
     // "doktora na silné krvácení", "specialistu na krvácení"
     /\b(doktor\w*|lekar\w*|specialist\w*|ordinac\w*|klinik\w*)\b[^.?!]{0,30}\bna\b[^.?!]{0,20}krvac\w*/,
-    // "která mi léčí krvácení", "co řeší krvácení"
-    /\b(leci|lecit|lecil\w*|resi|resit)\b[^.?!]{0,20}krvac\w*/,
+    // "která mi léčí krvácení", "co řeší krvácení", "který umí zastavit krvácení"
+    /\b(leci|lecit|lecil\w*|resi|resit|umi|provadi|zastavuje)\b[^.?!]{0,20}krvac\w*/,
     // a standing condition rather than an event
     /\bsklony?\s+ke?\s+krvac\w*/,
     /krvac\w*\s+(dasni|desni|z nosu|pri menstruaci)/,

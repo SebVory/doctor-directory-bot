@@ -554,7 +554,7 @@ number is 42/44 (95 %).**
 
 ---
 
-## 2026-09-15 — re-validace jednoho vícetahového scénáře, 3 tahy
+## 2026-09-15 - re-validation of one multi-turn scenario, 3 turns
 
 Not an eval run. The narrowing dialogue in the README was labelled "skutečný
 průběh z eval běhu" and could not be shown: the runner prints answers truncated

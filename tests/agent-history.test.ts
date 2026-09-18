@@ -334,6 +334,9 @@ describe("isEmergencyUtterance", () => {
     // The reflexive moves, so the failure word cannot carry it.
     "Krvácení zastavit se nedaří.",
     "Nedaří se mi zastavit krvácení.",
+    "Neumím zastavit krvácení.",
+    // Asking how to stop it is urgent on its own, with no failure word at all.
+    "Jak zastavit krvácení?",
     // Heavy bleeding reported, not shopped for.
     "Máma má silné krvácení.",
     // Six that a first version of the narrowing silently dropped. Vetoing on
@@ -370,6 +373,8 @@ describe("isEmergencyUtterance", () => {
     "Hledám doktora na silné krvácení při menstruaci.",
     "Sháním hematologa, mám sklony ke krvácení.",
     "Potřebuji specialistu na krvácení.",
+    // A doctor who knows how to stop it is a doctor, not an emergency.
+    "Hledám doktora, který umí zastavit krvácení.",
     "Hledám lékaře na krvácení z nosu.",
     // Numbers are never examined, so 155 in a phone number means nothing here.
     "Číslo ordinace končí 155.",
