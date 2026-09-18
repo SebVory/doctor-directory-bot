@@ -1,5 +1,8 @@
 # Real STT transcripts (macOS dictation, Czech). A line = what STT wrote, unaltered.
 # => target (who or what was meant) | expected FIRST turn from the bot
+# The bot always answers in Czech; the notes here name behaviour and the fields
+# best_question returns (city, speciality, first_name, languages, last_name),
+# not the words it says. Quoted Czech is quoted because the wording matters.
 # Note: every surname has ~270 rows in the data, so "surname only" never ends in a find,
 # always in a question. Contact and hours are read out only after narrowing to one.
 
@@ -31,7 +34,7 @@ Dobrý den, the volal sem se do nemocnice. Do Prahy 4.
 => nobody | Praha is not in the network, say so and ask what they need; no tool, or unresolved city
 
 Hello, hello, Slishy Messer.
-=> nobody, a line check | "Slyším vás, jak vám můžu pomoct?", no tool, in Czech
+=> nobody, a line check | "Slyším vás, jak vám můžu pomoct?", no tool
 
 Dobrý den, je tam pan doktor Bob Hordyska, potřeboval bych s ním mluvit.
 => nobody, no such surname in the data | not_found, ask for speciality or city; never offer a similar name as fact
