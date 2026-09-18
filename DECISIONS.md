@@ -580,8 +580,19 @@ stop, but "nemůžu" in Czech is nearly always about failing to reach someone:
 "Nemůžu se dovolat paní doktorce, která mi léčí krvácení dásní" went to 155.
 "Silné krvácení" matched inside an explicit search for a doctor who treats it.
 The failure now has to attach to a stopping verb, and the heavy-bleeding wording
-only counts outside a search framing. **22 of 22** on a positive/negative set,
-and still exactly the same 3 fires across all 44 cases.
+only counts when the bleeding is not itself the thing being shopped for.
+
+**The first version of that narrowing was worse than the bug.** It vetoed on any
+search vocabulary anywhere in the sentence, which is not how people in trouble
+talk: "Nemůžu se dovolat záchranky, manželka silně krvácí", "Hledám pomoc, táta
+silně krvácí" and "Potřebuji doktora, syn silně krvácí z nohy" all stopped
+dispatching. Six true emergencies traded for three false ones, on the side of
+the asymmetry this guard exists to protect. It was caught by writing the
+adversarial set before committing, not by the tests, which all passed. The veto
+is now local to the bleeding word: the condition has to be grammatically
+attached to the doctor being sought or to a verb of treating it. All six
+dispatch again. **22 of 22** on the positive/negative set, six of six on the
+mixed set, and still exactly the same 3 fires across all 44 cases.
 
 **Czech case endings were being read as different people.** This is the cost of
 §15, and it was not visible when §15 was measured: once names go to the store
@@ -625,7 +636,7 @@ paediatrician; the line names no city, and the annotation was loose rather than
 wrong. It is now explicit that "1 → found" holds within an already narrowed set.
 
 **Still unmeasured.** None of this has seen the live model. It is offline work
-against the snapshot and 254 tests.
+against the snapshot and 263 tests.
 
 ## 21. "Indexy to řeší" was not true for the commonest query
 
@@ -636,7 +647,8 @@ the filter leaves.
 **Measured.** True with a city or speciality, at 0.2 ms. False for a surname,
 which is the commonest shape a caller gives: a surname is not compared by
 equality, so it never reaches a `WHERE`, and the fuzzy score ran in JS over all
-7029 rows for **7.6 to 8.3 ms** (p50 of 300). The surname index was never used.
+7029 rows for **6.9 to 8.3 ms** (p50 of 300, three surnames). The surname
+index was never used.
 
 **Decided.** The rows carry only 26 distinct surnames and 30 given names, so
 scoring per row rebuilt the same trigram sets thousands of times: 7029 calls

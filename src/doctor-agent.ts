@@ -80,25 +80,30 @@ const tools: Anthropic.Tool[] = [
 /**
  * The rules plus the one fact that changes daily.
  *
- * Built once per process and cached: it goes into the request with
- * cache_control, so it has to be byte-identical between turns. A missing
- * snapshot is not fatal here — the date line is simply left out and the tool
- * call fails later with its own message.
+ * Cached on the snapshot date rather than built once, which is the whole point:
+ * it goes into the request with cache_control, so it has to be byte-identical
+ * between turns of the same call, but a process that outlives the nightly
+ * ingest must not keep quoting yesterday. This is the same trap doctor-store
+ * re-reads `meta` on every query to avoid, and caching once per process walked
+ * straight back into it. A missing snapshot is not fatal — the date line is
+ * left out, and it appears on its own once there is a snapshot to ask.
  */
-let systemCache: string | null = null;
+let systemCache: { loaded: string; text: string } | null = null;
 function systemPrompt(): string {
-  if (systemCache !== null) return systemCache;
-  let loaded: string | null = null;
+  let loaded: string;
   try {
     loaded = dataAsOf();
   } catch {
-    loaded = null;
+    loaded = "unknown";
   }
-  systemCache =
-    loaded === null || loaded === "unknown"
+  if (systemCache?.loaded === loaded) return systemCache.text;
+
+  const text =
+    loaded === "unknown"
       ? SYSTEM_RULES
       : `${SYSTEM_RULES}\n\nSeznam lékařů je z ${loaded}. Tohle datum řekni, když se volající ptá, jak jsou údaje aktuální.`;
-  return systemCache;
+  systemCache = { loaded, text };
+  return text;
 }
 
 /** Hard stop on the tool loop — a phone line cannot wait for a runaway agent. */

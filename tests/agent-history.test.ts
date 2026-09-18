@@ -327,6 +327,16 @@ describe("isEmergencyUtterance", () => {
     "Krvácení se nezastavuje.",
     // Heavy bleeding reported, not shopped for.
     "Máma má silné krvácení.",
+    // Six that a first version of the narrowing silently dropped. Vetoing on
+    // any search vocabulary anywhere in the sentence is far too blunt: people
+    // in an emergency say "hledám", "potřebuji" and "nemůžu se dovolat" too.
+    // The veto has to attach to the bleeding, not to the sentence.
+    "Nemůžu se dovolat záchranky, manželka silně krvácí.",
+    "Hledám pomoc, táta silně krvácí.",
+    "Potřebuji doktora, syn silně krvácí z nohy.",
+    "Nemůžu najít nikoho, manžel má silné krvácení.",
+    "Sháním sanitku, silně krvácí.",
+    "Silně krvácí, nemůžu se dovolat na kliniku.",
   ])("dispatches %j", (utterance) => {
     expect(isEmergencyUtterance(utterance)).toBe(true);
     expect(emergencyReason(utterance)).not.toBeNull();
@@ -350,6 +360,8 @@ describe("isEmergencyUtterance", () => {
     "Nemůžu najít doktora, co léčí krvácení.",
     "Hledám doktora na silné krvácení při menstruaci.",
     "Sháním hematologa, mám sklony ke krvácení.",
+    "Potřebuji specialistu na krvácení.",
+    "Hledám lékaře na krvácení z nosu.",
     // Numbers are never examined, so 155 in a phone number means nothing here.
     "Číslo ordinace končí 155.",
     "Telefon je +40-243-864-155.",

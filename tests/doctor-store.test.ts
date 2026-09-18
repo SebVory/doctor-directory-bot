@@ -1,6 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import Database from "better-sqlite3";
 import { afterAll, describe, expect, it } from "vitest";
 
 // DOCTORS_DB is read when ingest.ts evaluates, so it must be set before the
@@ -592,5 +593,34 @@ describe("snapshot date in the system prompt", () => {
       expect(system).toContain(dataAsOf());
       expect(result.toolCalls).toHaveLength(0);
     });
+  });
+
+  it("follows the snapshot when it is swapped under a running process", async () => {
+    // The prompt is cached so it stays byte-identical for prompt caching, and
+    // the first version of that cache was built once per process — which is
+    // exactly the trap doctor-store re-reads meta on every query to avoid. A
+    // bot left running over a nightly ingest would have quoted yesterday.
+    const writable = new Database(process.env["DOCTORS_DB"] ?? "");
+    try {
+      writable.prepare("UPDATE meta SET loaded_at = ? WHERE id = 1").run("2099-01-01T00:00:00.000Z");
+    } finally {
+      writable.close();
+    }
+
+    let system = "";
+    const recording = {
+      messages: {
+        create: async (params: { system?: unknown }) => {
+          system = JSON.stringify(params.system ?? "");
+          return {
+            id: "msg", type: "message", role: "assistant", model: "test",
+            content: [{ type: "text", text: "Ano." }],
+            stop_reason: "end_turn", usage: {},
+          };
+        },
+      },
+    };
+    await runTurn("A teď?", [], { trace: false, client: recording as never });
+    expect(system).toContain("2099-01-01");
   });
 });

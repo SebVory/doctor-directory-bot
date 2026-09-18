@@ -31,7 +31,7 @@ připomínek sedělo. Čtyři z nich byly chyby v chování, ne v textu: emergen
 guard posílal na 155 i běžné dotazy se slovem „krvácení", pádové koncovky
 u křestních jmen se četly jako jiný člověk, potvrzení jména nemělo cestu ven
 a dotaz na čerstvost dat spouštěl hledání přes všech 7029 řádků. Všechno je
-opravené a ověřené offline proti snapshotu a 254 testům, ale **proti živému
+opravené a ověřené offline proti snapshotu a 263 testům, ale **proti živému
 modelu to zatím neběželo**, číslo 42/44 výš je z běhu před těmi opravami.
 Podrobně v [DECISIONS.md](DECISIONS.md) §20 a §21.
 
@@ -137,7 +137,7 @@ z výsledku složí větu. Dotaz do SQLite mezi nimi je proti tomu zaokrouhlovac
 chyba, ale ne tak malá, jak tu dřív stálo. S městem nebo oborem ve filtru běží
 za **0,2 ms**, protože na ně tabulka má index. Se samotným příjmením žádný
 `WHERE` nemá, protože příjmení se neporovnává rovností, ale fuzzy skóre v JS nad všemi
-7029 řádky. To je nejčastější tvar dotazu a stál **7,6 až 8,3 ms**; memoizace
+7029 řádky. To je nejčastější tvar dotazu a stál **6,9 až 8,3 ms**; memoizace
 skóre na 26 distinktních příjmení ho srazila na **4,2 až 4,6 ms** a zbytek jsou
 3,4 ms na samotný `SELECT`. Pořád je to tisícina jednoho volání modelu, takže
 zrychlovat se má jinde, ale „indexy to řeší" nebyla pravda.
@@ -409,7 +409,7 @@ a model ho porušil u 186 kandidátů, takže je teď `must_ask` v datech. Přep
 ```
 $ npm run typecheck && npm test
   Test Files  5 passed (5)
-       Tests  254 passed (254)
+       Tests  263 passed (263)
    Duration  268ms
 ```
 

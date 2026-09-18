@@ -49,12 +49,29 @@ const STOP_FAILURE =
   /\b(nejde|nejdou|nemuz\w*|neda se|nedari se|nedokaz\w*)\b[^.?!]{0,30}\bzastav\w*|\bzastav\w*[^.?!]{0,20}\b(nejde|nejdou|nemuz\w*|neda se)\b|\bnezastav\w*/;
 
 /**
- * The sentence is shopping for a doctor, not reporting what is happening. A
- * directory query names a condition it wants treated; an emergency describes
- * the present tense. Both say "krvácení", and only the framing tells them apart.
+ * The bleeding is what the caller is shopping for, not what is happening.
+ *
+ * A first attempt vetoed on any search vocabulary in the sentence, which was
+ * far too blunt and cost six true emergencies: "Nemůžu se dovolat záchranky,
+ * manželka silně krvácí" and "Potřebuji doktora, syn silně krvácí z nohy" both
+ * stopped dispatching. In a directory query the bleeding is grammatically
+ * attached to the doctor being sought or to a verb of treating it; in an
+ * emergency it is a predicate about a person, right now. So the veto has to be
+ * local to the bleeding word, never a property of the whole sentence.
  */
-const SEEKING =
-  /\bhledam\b|\bhledame\b|\bshanim\b|\bpotrebuj\w* (doktora|lekare|specialistu|kontakt)\b|\bdoktora na\b|\blekare na\b|\bspecialist\w*|\bleci\b|\bobjednat\b|\bordinac\w*|\bdovolat\b|\bnajit\b|\bcislo na\b/;
+const BLEEDING_AS_CONDITION = new RegExp(
+  [
+    // "doktora na silné krvácení", "specialistu na krvácení"
+    /\b(doktor\w*|lekar\w*|specialist\w*|ordinac\w*|klinik\w*)\b[^.?!]{0,30}\bna\b[^.?!]{0,20}krvac\w*/,
+    // "která mi léčí krvácení", "co řeší krvácení"
+    /\b(leci|lecit|lecil\w*|resi|resit)\b[^.?!]{0,20}krvac\w*/,
+    // a standing condition rather than an event
+    /\bsklony?\s+ke?\s+krvac\w*/,
+    /krvac\w*\s+(dasni|desni|z nosu|pri menstruaci)/,
+  ]
+    .map((r) => r.source)
+    .join("|"),
+);
 
 /**
  * Each entry is one recognised emergency, as a caller actually says it.
@@ -87,11 +104,12 @@ const PATTERNS: ReadonlyArray<{ readonly label: string; readonly test: (t: strin
     // doktorce, co mi léčí krvácení dásní" is a caller who cannot get through —
     // so the failure to stop it has to attach to a stopping verb, not float
     // anywhere in the sentence. And "silné krvácení" is how a caller names the
-    // condition they want treated, so it only counts outside a search framing.
+    // condition they want treated, so it does not count when the bleeding is
+    // grammatically the thing being shopped for.
     test: (t) =>
       (BLEEDING.test(t) && STOP_FAILURE.test(t)) ||
       (/\bsilne krvaceni\b|\bsilne krvaci\b|\bhodne krvaci\b|\bzastavit krvaceni\b|\bzastavit krev\b/.test(t) &&
-        !SEEKING.test(t)),
+        !BLEEDING_AS_CONDITION.test(t)),
   },
   {
     label: "unconscious or unresponsive",
