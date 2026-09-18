@@ -37,6 +37,25 @@ function fold(text: string): string {
  */
 const PAST = /\bloni\b|\bpred (rokem|lety|mesicem|tydnem)\b|\bv minulosti\b|\bmel[aioy]?\b|\bmela\b|\bprodelal[aioy]?\b/;
 
+/** Any mention of blood or bleeding, in any case ending. */
+const BLEEDING = /\bkrvac\w*|\bkrev\b|\bkrvi\b/;
+
+/**
+ * The caller is failing to stop the bleeding. The verb has to be there: "nemůžu"
+ * on its own is usually about reaching someone, not about a wound. Czech word
+ * order is free, so both "nejde to zastavit" and "zastavit to nejde" count.
+ */
+const STOP_FAILURE =
+  /\b(nejde|nejdou|nemuz\w*|neda se|nedari se|nedokaz\w*)\b[^.?!]{0,30}\bzastav\w*|\bzastav\w*[^.?!]{0,20}\b(nejde|nejdou|nemuz\w*|neda se)\b|\bnezastav\w*/;
+
+/**
+ * The sentence is shopping for a doctor, not reporting what is happening. A
+ * directory query names a condition it wants treated; an emergency describes
+ * the present tense. Both say "krvácení", and only the framing tells them apart.
+ */
+const SEEKING =
+  /\bhledam\b|\bhledame\b|\bshanim\b|\bpotrebuj\w* (doktora|lekare|specialistu|kontakt)\b|\bdoktora na\b|\blekare na\b|\bspecialist\w*|\bleci\b|\bobjednat\b|\bordinac\w*|\bdovolat\b|\bnajit\b|\bcislo na\b/;
+
 /**
  * Each entry is one recognised emergency, as a caller actually says it.
  *
@@ -44,7 +63,8 @@ const PAST = /\bloni\b|\bpred (rokem|lety|mesicem|tydnem)\b|\bv minulosti\b|\bme
  * to the model, because "bolest na hrudi" also shows up in "hledám doktora na
  * bolesti na hrudi". Head trauma needs a trauma verb — a fall, a blow, the word
  * "úraz" or "poranění" — never the bare word "hlava". Bleeding needs the caller
- * to be trying to stop it. Stroke wording needs a present-tense sign.
+ * to be failing to stop it, or to describe it as heavy outside a search framing.
+ * Stroke wording needs a present-tense sign.
  */
 const PATTERNS: ReadonlyArray<{ readonly label: string; readonly test: (t: string) => boolean }> = [
   {
@@ -62,9 +82,16 @@ const PATTERNS: ReadonlyArray<{ readonly label: string; readonly test: (t: strin
   },
   {
     label: "bleeding the caller cannot stop",
+    // Two ways in, and both had to be narrowed after they fired on directory
+    // queries. "Nemůžu" near "krvácení" is not a symptom — "Nemůžu se dovolat
+    // doktorce, co mi léčí krvácení dásní" is a caller who cannot get through —
+    // so the failure to stop it has to attach to a stopping verb, not float
+    // anywhere in the sentence. And "silné krvácení" is how a caller names the
+    // condition they want treated, so it only counts outside a search framing.
     test: (t) =>
-      /\bsilne krvaceni\b|\bsilne krvaci\b|\bhodne krvaci\b|\bzastavit krvaceni\b|\bzastavit krev\b/.test(t) ||
-      (/\bkrvac\w*/.test(t) && /\bnejde\b|\bnemuzu\b|\bneda se\b|\bnezastav\w*/.test(t)),
+      (BLEEDING.test(t) && STOP_FAILURE.test(t)) ||
+      (/\bsilne krvaceni\b|\bsilne krvaci\b|\bhodne krvaci\b|\bzastavit krvaceni\b|\bzastavit krev\b/.test(t) &&
+        !SEEKING.test(t)),
   },
   {
     label: "unconscious or unresponsive",

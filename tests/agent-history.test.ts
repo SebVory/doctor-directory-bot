@@ -322,6 +322,11 @@ describe("isEmergencyUtterance", () => {
     "Soused nedýchá.",
     "Poklesl mu koutek a nemůže mluvit.",
     "Silně krvácí a nejde to zastavit.",
+    // Word order is free, so the stopping verb may come before the failure.
+    "Krvácení zastavit nejde.",
+    "Krvácení se nezastavuje.",
+    // Heavy bleeding reported, not shopped for.
+    "Máma má silné krvácení.",
   ])("dispatches %j", (utterance) => {
     expect(isEmergencyUtterance(utterance)).toBe(true);
     expect(emergencyReason(utterance)).not.toBeNull();
@@ -337,6 +342,14 @@ describe("isEmergencyUtterance", () => {
     "Bolí mě ještě jeden hlava. Co si na to mám vzít?",
     // "krvácení" as a condition someone treats, not one the caller is stopping.
     "Hledám doktora, který léčí krvácení z nosu.",
+    // Three sentences that used to dispatch. "Nemůžu" was matching anywhere in
+    // the sentence, and it is almost always about reaching a person, not about
+    // a wound; "silné krvácení" was matching inside an explicit search. Both
+    // now need the bleeding and the trouble to be about the same thing.
+    "Nemůžu se dovolat paní doktorce, která mi léčí krvácení dásní.",
+    "Nemůžu najít doktora, co léčí krvácení.",
+    "Hledám doktora na silné krvácení při menstruaci.",
+    "Sháním hematologa, mám sklony ke krvácení.",
     // Numbers are never examined, so 155 in a phone number means nothing here.
     "Číslo ordinace končí 155.",
     "Telefon je +40-243-864-155.",
@@ -345,6 +358,11 @@ describe("isEmergencyUtterance", () => {
     "Do kolika ordinuje doktor Dumitrescu v Kluži?",
     "Hledám kardiologa, mám vysoký tlak.",
     "Můžete panu doktorovi říct, že jsem ho schránil?",
+    // Deliberate, and the most arguable line in the file: past tense wins over a
+    // present-tense sign, so a stroke described as history goes to the search
+    // even when the sentence also says the person cannot speak. The caller who
+    // means it now says "má mrtvici" or "přestal mluvit", and both dispatch.
+    "Táta měl mrtvici a nemůže mluvit.",
   ])("leaves %j to the model", (utterance) => {
     expect(isEmergencyUtterance(utterance)).toBe(false);
     expect(emergencyReason(utterance)).toBeNull();

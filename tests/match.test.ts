@@ -7,6 +7,7 @@ import { DoctorSchema, doctorId, findUnreachableValues, loadSnapshot } from "../
 import {
   CITY_SYNONYMS,
   SPECIALITY_SYNONYMS,
+  firstNameVariants,
   normalize,
   normalizeSurname,
   resolveCity,
@@ -413,5 +414,42 @@ describe("ingest guards", () => {
 
     expect(outcome.ok).toBe(true);
     expect(rowCount(dbPath)).toBe(8);
+  });
+});
+
+describe("firstNameVariants", () => {
+  it("offers the base form behind a Czech case ending", () => {
+    for (const [spoken, base] of [
+      ["alinu", "alina"],
+      ["alino", "alina"],
+      ["aliny", "alina"],
+      ["anu", "ana"],
+      ["oano", "oana"],
+      ["mihaie", "mihai"],
+      ["ionu", "ion"],
+      ["mariu", "maria"],
+    ] as const) {
+      expect(firstNameVariants(spoken)).toContain(base);
+    }
+  });
+
+  it("keeps the caller's own form first, so a correct name is never outranked", () => {
+    expect(firstNameVariants("alinu")[0]).toBe("alinu");
+    expect(firstNameVariants("ana")[0]).toBe("ana");
+  });
+
+  it("offers the bare stem for endings that add a syllable", () => {
+    // "Andreje" is one letter from "Andrei" once the ending is gone.
+    expect(firstNameVariants("andreje")).toContain("andrej");
+  });
+
+  it("leaves a name ending in a consonant alone", () => {
+    expect(firstNameVariants("florin")).toEqual(["florin"]);
+    expect(firstNameVariants("bogdan")).toEqual(["bogdan"]);
+  });
+
+  it("refuses to chew a short name down to nothing", () => {
+    // Two letters left would match almost anything, so nothing is offered.
+    expect(firstNameVariants("ia")).toEqual(["ia"]);
   });
 });

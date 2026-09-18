@@ -3,7 +3,7 @@
  */
 import Database from "better-sqlite3";
 import { DB_PATH } from "./ingest.js";
-import { normalize, normalizeSurname, resolveCity, resolveLanguage, resolveSpeciality, similarityOfNormalized } from "./match.js";
+import { firstNameVariants, normalize, normalizeSurname, resolveCity, resolveLanguage, resolveSpeciality, similarityOfNormalized } from "./match.js";
 
 /**
  * Below this surname confidence the bot reads the name back before giving out
@@ -227,6 +227,8 @@ type Store = {
   locations: string[];
   /** Every surname in the snapshot, normalized, so we can tell a real name from a mishearing. */
   surnames: Set<string>;
+  /** Same for given names, so a name the data knows is never widened into another. */
+  firstNames: Set<string>;
   dataAsOf: string;
 };
 
@@ -249,13 +251,17 @@ function store(): Store {
       (db.prepare("SELECT DISTINCT last_name_norm FROM doctors").all() as { last_name_norm: string }[])
         .map((r) => r.last_name_norm),
     );
-    cached = { db, locations, surnames, dataAsOf: loadedAt };
+    const firstNames = new Set(
+      (db.prepare("SELECT DISTINCT first_name_norm FROM doctors").all() as { first_name_norm: string }[])
+        .map((r) => r.first_name_norm),
+    );
+    cached = { db, locations, surnames, firstNames, dataAsOf: loadedAt };
   }
   return cached;
 }
 
 export function findDoctors(query: FindQuery): FindResult {
-  const { db, locations, surnames: knownSurnames, dataAsOf } = store();
+  const { db, locations, surnames: knownSurnames, firstNames: knownFirstNames, dataAsOf } = store();
   const limit = query.limit ?? 3;
 
   const speciality = resolveSpeciality(query.speciality);
@@ -311,9 +317,45 @@ export function findDoctors(query: FindQuery): FindResult {
   const surnameNorm = query.surname === undefined ? null : normalizeSurname(query.surname);
   const firstNorm = query.first_name === undefined ? null : normalize(query.first_name);
 
+  // A given name the data already knows is taken at its word. Anything else may
+  // be a Czech case ending, so it is scored against every base form it could
+  // have come from — see firstNameVariants.
+  const firstCandidates =
+    firstNorm === null ? null : knownFirstNames.has(firstNorm) ? [firstNorm] : firstNameVariants(firstNorm);
+
+  // 7029 rows carry 26 distinct surnames and 30 given names between them, so
+  // scoring per row rebuilt the same trigram sets thousands of times: 7029 calls
+  // cost 9.1 ms, the 26 distinct ones cost 0.66 ms. Memoising on the normalized
+  // column value took a surname-only search from 7.6-8.3 ms to 4.2-4.6 ms (p50,
+  // 300 runs) and paid for the extra given-name candidates several times over.
+  // The remaining 3.4 ms is the unfiltered SELECT, which is a separate problem.
+  const surnameScores = new Map<string, number>();
+  const scoreSurname = (norm: string): number => {
+    if (surnameNorm === null) return 1;
+    const seen = surnameScores.get(norm);
+    if (seen !== undefined) return seen;
+    const value = similarityOfNormalized(surnameNorm, norm);
+    surnameScores.set(norm, value);
+    return value;
+  };
+
+  const firstScores = new Map<string, number>();
+  const scoreFirst = (norm: string): number => {
+    if (firstCandidates === null) return 1;
+    const seen = firstScores.get(norm);
+    if (seen !== undefined) return seen;
+    let best = 0;
+    for (const candidate of firstCandidates) {
+      const value = similarityOfNormalized(candidate, norm);
+      if (value > best) best = value;
+    }
+    firstScores.set(norm, best);
+    return best;
+  };
+
   const scored = rows.flatMap((row) => {
-    const score = surnameNorm === null ? 1 : similarityOfNormalized(surnameNorm, row.last_name_norm);
-    const firstScore = firstNorm === null ? 1 : similarityOfNormalized(firstNorm, row.first_name_norm);
+    const score = scoreSurname(row.last_name_norm);
+    const firstScore = scoreFirst(row.first_name_norm);
     if (firstNorm !== null && firstScore < FIRST_NAME_FLOOR) return [];
     return [{ row, score, firstScore }];
   });

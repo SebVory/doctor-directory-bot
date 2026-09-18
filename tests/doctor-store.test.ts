@@ -143,10 +143,35 @@ describe("a given name must not substitute a neighbour", () => {
     expect(findDoctors({ surname: "Dumitresku", first_name: "Dáryu" }).matches[0]?.first_name).toBe("Daria");
   });
 
-  it("asks when the given name matched only loosely", () => {
-    const loose = findDoctors({ surname: "Dumitresku", first_name: "Alinu", city: "Kluž" });
-    expect(loose.matches[0]?.first_name).toBe("Alina");
-    expect(loose.needs_confirmation).toBe(true); // 0.817 is under FIRST_NAME_CONFIRM
+  it("does not re-confirm a name the caller pronounced correctly", () => {
+    // This test used to assert the opposite, and it was wrong. Once the model
+    // started passing names through verbatim, the store saw the accusative
+    // "Alinu", scored it 0.817 against "Alina", and read back a name the caller
+    // had just said — a confirmation step bought by nothing but a case ending.
+    const declined = findDoctors({ surname: "Dumitresku", first_name: "Alinu", city: "Kluž" });
+    expect(declined.matches[0]?.first_name).toBe("Alina");
+    expect(declined.needs_confirmation).toBe(false);
+  });
+
+  it("finds short given names that trigrams cannot see through", () => {
+    // "Anu" and "Ana" share no trigram at all, so the row used to fall under
+    // FIRST_NAME_FLOOR and vanish. Ten Oanas in Oradea came back as "nemám".
+    for (const spoken of ["Anu", "Ano", "Any"]) {
+      expect(findDoctors({ surname: "Dumitresku", first_name: spoken }).matches[0]?.first_name).toBe("Ana");
+    }
+    // The transcript case is "Oano z kliniky Oradea Care" — ten Oanas in the
+    // full snapshot, none in the 500-row sample, so the city is left out here
+    // and the vocative is what is under test.
+    const oana = findDoctors({ first_name: "Oano" });
+    expect(oana.matches.length).toBeGreaterThan(0);
+    expect(oana.matches[0]?.first_name).toBe("Oana");
+  });
+
+  it("does not widen a given name the data already knows", () => {
+    // "Florin" is a name in its own right, so it must not be treated as a
+    // declined "Florina" and hand back the wrong person as the top match.
+    const florin = findDoctors({ surname: "Dumitrescu", first_name: "Florin" });
+    expect(florin.matches[0]?.first_name).toBe("Florin");
   });
 });
 
