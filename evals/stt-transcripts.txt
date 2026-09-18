@@ -3,8 +3,11 @@
 # The bot always answers in Czech; the notes here name behaviour and the fields
 # best_question returns (city, speciality, first_name, languages, last_name),
 # not the words it says. Quoted Czech is quoted because the wording matters.
-# Note: every surname has ~270 rows in the data, so "surname only" never ends in a find,
-# always in a question. Contact and hours are read out only after narrowing to one.
+# Note: in the full snapshot every surname has ~270 rows (248-291 across the 26
+# of them); in the committed 500-row sample it is 9-28. Either way "surname only"
+# never ends in a find, always in a question, but scripts/stt-report.ts reads
+# whichever snapshot was ingested, so read its candidate counts accordingly.
+# Contact and hours are read out only after narrowing to one.
 
 Dobrý den, já vás zdravím, chtěl bych se zeptat, jestli máte číslo na doktora Dumistrésku.
 => Dumitrescu, phone | ask_clarification (city), contact only after narrowing
